@@ -1,0 +1,65 @@
+# Build and publish the site to GitHub Pages on every push to main.
+#
+# The .env file is git-ignored, so a build run here has no configuration of its
+# own. The values come from the repository's secrets and variables instead —
+# see README.md, "Deploying". Without them the site still builds and loads, it
+# simply shows "Connect the Google Sheet" and no data.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  # Lets you re-publish from the Actions tab after changing a secret, without
+  # having to make an empty commit.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two publishes race. A run already in progress is allowed to finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        env:
+          GITHUB_PAGES: "true"
+          # Reading the sheet needs only the id, and the sheet is already shared
+          # publicly, so this one is a repository *variable*.
+          VITE_SHEET_ID: ${{ vars.VITE_SHEET_ID }}
+          VITE_DRIVE_FOLDER_ID: ${{ vars.VITE_DRIVE_FOLDER_ID }}
+          VITE_CACHE_MINUTES: ${{ vars.VITE_CACHE_MINUTES || '5' }}
+          VITE_LOGO_URL: ${{ vars.VITE_LOGO_URL }}
+          # Writing goes through the Apps Script Web App.
+          VITE_SHEET_API_URL: ${{ secrets.VITE_SHEET_API_URL }}
+          VITE_SHEET_API_KEY: ${{ secrets.VITE_SHEET_API_KEY }}
+        run: npm run build:pages
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

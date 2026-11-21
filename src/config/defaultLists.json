@@ -1,0 +1,178 @@
+{
+  "_comment": [
+    "Built-in defaults for every dropdown list and threshold.",
+    "",
+    "The application reads a value from the Settings tab of the Google Sheet when",
+    "a row exists for it, and falls back to the value here when it does not. So a",
+    "fresh Sheet works immediately, and Chintan can still change any list from the",
+    "Settings page without a code change.",
+    "",
+    "`fixed: true` marks a list the specification does not allow to be changed",
+    "(areas, section 4.1) or that the code itself matches against (source types,",
+    "roles). Those are shown read-only on the Settings page."
+  ],
+
+  "lists": {
+    "areas": {
+      "fixed": true,
+      "label": "Areas",
+      "spec": "4.1",
+      "description": "The three areas used in every area dropdown. Fixed by the specification.",
+      "values": ["MCD", "NDMC", "Others"]
+    },
+
+    "sourceTypes": {
+      "fixed": true,
+      "label": "Source types",
+      "spec": "1.2",
+      "description": "Collection source keys. Stored in the Sheet and matched in code, so these cannot be renamed.",
+      "values": ["MMRF", "RRR", "BWG", "SPECIAL"]
+    },
+
+    "roles": {
+      "fixed": true,
+      "label": "User roles",
+      "spec": "3",
+      "description": "The two user types. The permission checks compare against these exact words.",
+      "values": ["Super Admin", "Supervisor"]
+    },
+
+    "states": {
+      "fixed": true,
+      "label": "States and union territories",
+      "spec": "7.1",
+      "description": "Indian states and union territories, for the vendor address.",
+      "values": [
+        "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+        "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka",
+        "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya",
+        "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim",
+        "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand",
+        "West Bengal", "Andaman and Nicobar Islands", "Chandigarh",
+        "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir",
+        "Ladakh", "Lakshadweep", "Puducherry"
+      ]
+    },
+
+    "wasteStreams": {
+      "fixed": false,
+      "label": "Waste streams",
+      "spec": "4.2",
+      "description": "The five waste streams. Change these only alongside the waste category master.",
+      "values": ["Wet", "Dry", "Sanitary", "Special Care", "Others"]
+    },
+
+    "vendorTypes": {
+      "fixed": false,
+      "label": "Vendor types",
+      "spec": "7.1, editable per 17.4",
+      "description": "What kind of service provider a vendor is. \"Others\" shows a free-text box on the form.",
+      "values": [
+        "Recycler", "Aggregator / Kabadi", "Biomethanation plant",
+        "Composting plant", "Waste-to-energy plant",
+        "Co-processor (cement kiln)", "Others"
+      ]
+    },
+
+    "bwgTypes": {
+      "fixed": false,
+      "label": "BWG types",
+      "spec": "8.1, editable per 17.4",
+      "description": "What kind of bulk waste generator. \"Others\" shows a free-text box on the form.",
+      "values": [
+        "Hotel", "School", "Embassy", "Office", "Market",
+        "RWA", "Hospital", "Institution", "Others"
+      ]
+    },
+
+    "operationTypes": {
+      "fixed": false,
+      "label": "Operation types",
+      "spec": "8.1, 9",
+      "description": "Which streams a BWG or MMRF handles.",
+      "values": ["Dry waste only", "Wet waste only", "Both"]
+    },
+
+    "collectionFrequencies": {
+      "fixed": false,
+      "label": "Collection frequencies",
+      "spec": "8.1",
+      "description": "How often a BWG is collected from. For information only — it does not restrict inward entry.",
+      "values": ["Daily", "Alternate days", "Weekly", "Monthly", "On-call request"]
+    },
+
+    "agreementTypes": {
+      "fixed": false,
+      "label": "Agreement types",
+      "spec": "8.1",
+      "description": "The financial arrangement with a BWG.",
+      "values": ["Chintan pays BWG", "BWG pays Chintan", "No financial exchange"]
+    },
+
+    "mouTypes": {
+      "fixed": false,
+      "label": "MoU types",
+      "spec": "7.1",
+      "description": "A fixed-term MoU asks for an end date and raises an expiry alert.",
+      "values": ["Regular (ongoing)", "Fixed-term"]
+    },
+
+    "dispatchPurposes": {
+      "fixed": false,
+      "label": "Dispatch purposes",
+      "spec": "14.1",
+      "description": "Why waste was dispatched. Anything other than Disposal counts as landfill diversion.",
+      "values": [
+        "Recycling", "Composting", "Biomethanation", "Waste-to-energy",
+        "Co-processing", "Reuse / donation", "Disposal"
+      ]
+    },
+
+    "financials": {
+      "fixed": false,
+      "label": "Dispatch financials",
+      "spec": "14.1",
+      "description": "Who pays whom on a dispatch. No rate or amount is recorded.",
+      "values": ["Vendor pays Chintan", "Chintan pays vendor", "No payment"]
+    },
+
+    "vehicleTypes": {
+      "fixed": false,
+      "label": "Vehicle types",
+      "spec": "10.1",
+      "description": "An Electric vehicle hides the PUC validity field.",
+      "values": ["Electric", "Diesel", "Petrol", "CNG", "Hybrid"]
+    },
+
+    "collectedByOptions": {
+      "fixed": false,
+      "label": "Special collection — collected by",
+      "spec": "12.7",
+      "description": "Whether a special collection was done by a vendor or an RRR vehicle.",
+      "values": ["Vendor", "RRR on Wheels vehicle"]
+    }
+  },
+
+  "numbers": {
+    "litreToKgFactor": 0.92,
+    "certificatePendingDays": 30,
+    "categorisationPendingDays": 3,
+    "characterisationPendingDays": 2,
+    "documentExpiryWarnDays": 30,
+    "stockAgeingDays": 30,
+    "supervisorBackdateDays": 7,
+    "supervisorEditWindowDays": 3,
+    "deletedItemsRetentionDays": 7,
+    "maxUploadMb": 5,
+    "maxPhotoMb": 3,
+    "maxPhotosPerEntry": 5
+  },
+
+  "text": {
+    "organisationName": "Chintan Environmental Research and Action Group",
+    "organisationAddress": "",
+    "authorisedSignatoryName": "",
+    "authorisedSignatoryDesignation": "",
+    "diversionCertificatePrefix": "CHN/DC"
+  }
+}

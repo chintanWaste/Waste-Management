@@ -1,0 +1,111 @@
+/* Chintan Waste Operations Tracking System — design tokens */
+
+:root {
+  /* Brand — greens drawn from the Chintan logo, with a warm earth accent */
+  --c-brand-900: #0f3d2e;
+  --c-brand-800: #15523d;
+  --c-brand-700: #1b6b4f;
+  --c-brand-600: #22865f;
+  --c-brand-500: #2fa06f;
+  --c-brand-300: #8fd4b4;
+  --c-brand-100: #e4f5ec;
+
+  --c-accent-600: #c97a1e;
+  --c-accent-100: #fdf0dd;
+
+  /* Status */
+  --c-ok: #1b8f5a;
+  --c-ok-bg: #e4f5ec;
+  --c-warn: #b4760c;
+  --c-warn-bg: #fdf3e0;
+  --c-danger: #c23b3b;
+  --c-danger-bg: #fdeaea;
+  --c-info: #2563a8;
+  --c-info-bg: #e7f0fa;
+
+  /* Neutrals */
+  --c-ink: #11261f;
+  --c-body: #3c4a45;
+  --c-muted: #76857f;
+  --c-line: #e3e8e6;
+  --c-surface: #ffffff;
+  --c-surface-2: #f6f9f8;
+  --c-bg: #f1f5f3;
+
+  /* Shape & depth */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+  --sh-1: 0 1px 2px rgba(17, 38, 31, 0.06);
+  --sh-2: 0 4px 16px rgba(17, 38, 31, 0.08);
+  --sh-3: 0 12px 32px rgba(17, 38, 31, 0.12);
+
+  /* Layout */
+  --sidebar-w: 256px;
+  --topbar-h: 64px;
+
+  --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--c-body);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  color: var(--c-ink);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+h1 { font-size: 22px; }
+h2 { font-size: 18px; }
+h3 { font-size: 15px; }
+
+a { color: var(--c-brand-700); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Utilities */
+.u-row { display: flex; align-items: center; gap: 12px; }
+.u-row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.u-col { display: flex; flex-direction: column; gap: 12px; }
+.u-wrap { flex-wrap: wrap; }
+.u-grow { flex: 1; }
+.u-muted { color: var(--c-muted); }
+.u-small { font-size: 12px; }
+.u-mono { font-variant-numeric: tabular-nums; }
+.u-right { text-align: right; }
+.u-nowrap { white-space: nowrap; }
+
+/* Focus ring — consistent everywhere */
+:focus-visible {
+  outline: 2px solid var(--c-brand-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---------- Icons (lucide-react) ---------- */
+
+svg.lucide {
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+/* Keep an icon optically centred with the text beside it. */
+.btn svg, .navitem svg, .toast svg, .banner svg, .upload__help svg {
+  vertical-align: middle;
+}

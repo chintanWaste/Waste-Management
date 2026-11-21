@@ -3,7 +3,7 @@ import { readTab } from "../services/sheetsApi";
 
 /**
  * Load one Google Sheet tab.
- * Returns { rows, loading, error, reload }.
+ * Returns { rows, loading, error, reload, addRow }.
  */
 export function useSheetData(tabName, { enabled = true } = {}) {
   const [rows, setRows] = useState([]);
@@ -31,5 +31,17 @@ export function useSheetData(tabName, { enabled = true } = {}) {
     load(false);
   }, [load]);
 
-  return { rows, loading, error, reload: () => load(true) };
+  /**
+   * Show a just-created row straight away.
+   *
+   * The Sheet CSV endpoint can lag a second or two behind a write, so a row
+   * that was definitely saved would otherwise be missing from the table until
+   * the next refresh. The reload that follows replaces it with the real one.
+   */
+  const addRow = useCallback((row) => {
+    if (!row) return;
+    setRows((prev) => [row, ...prev]);
+  }, []);
+
+  return { rows, loading, error, reload: () => load(true), addRow };
 }

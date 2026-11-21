@@ -33,8 +33,11 @@ export async function loadVendorIdentifiers() {
 }
 
 /**
- * Creates the vendor and returns its new code.
+ * Creates the vendor and returns { code, row }.
+ *
  * `values` comes straight from the form; `documents` is the chosen File.
+ * `row` is exactly what was written, so the directory can show the vendor
+ * before the Sheet CSV endpoint catches up with the append.
  */
 export async function createVendor({ values, documents, user }) {
   if (!isWriteConfigured()) {
@@ -55,7 +58,7 @@ export async function createVendor({ values, documents, user }) {
   const now = new Date().toISOString();
   const gstRegistered = values.GST_Registered === "Yes";
 
-  await appendRow(VENDORS.tab, {
+  const row = {
     Vendor_Code: code,
     Vendor_Name: values.Vendor_Name.trim(),
     Vendor_Type: values.Vendor_Type,
@@ -84,7 +87,9 @@ export async function createVendor({ values, documents, user }) {
     Created_On: now,
     Updated_By: "",
     Updated_On: "",
-  });
+  };
 
-  return code;
+  await appendRow(VENDORS.tab, row);
+
+  return { code, row };
 }

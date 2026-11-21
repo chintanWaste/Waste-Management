@@ -1,5 +1,5 @@
 import { ExternalLink, Plug, Plus } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -7,7 +7,7 @@ import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import PageHeader from "../../components/common/PageHeader";
 import { Banner } from "../../components/common/States";
-import { VENDORS, isDriveConfigured } from "../../config/driveSchema";
+import { VENDORS, isDriveConfigured, isWriteConfigured } from "../../config/driveSchema";
 import { useSheetData } from "../../hooks/useSheetData";
 import { viewUrl } from "../../services/drive";
 import { date } from "../../utils/format";
@@ -16,8 +16,23 @@ import VendorForm from "./VendorForm";
 /** Sections 7.1–7.3 — Create vendor form at the top, directory below. */
 export default function VendorsPage() {
   const connected = isDriveConfigured();
+  const canSave = isWriteConfigured();
   const [formOpen, setFormOpen] = useState(false);
-  const { rows, loading, error, reload } = useSheetData(VENDORS.tab, { enabled: connected });
+  const [saving, setSaving] = useState(false);
+  const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
+
+  /**
+   * The new vendor goes into the table before the refetch, because the Sheet
+   * CSV endpoint can still be serving the pre-append copy for a second or two.
+   */
+  const handleCreated = useCallback(
+    ({ row }) => {
+      setFormOpen(false);
+      addRow(row);
+      reload();
+    },
+    [addRow, reload]
+  );
 
   const columns = [
     { key: "Vendor_Code", header: "Code", render: (r) => <span className="table__code">{r.Vendor_Code}</span> },
@@ -56,15 +71,18 @@ export default function VendorsPage() {
         }
       />
 
-            <Modal
+      <Modal
         open={formOpen}
         title="Create Vendor"
         subtitle="All fields are required unless marked otherwise"
         onClose={() => setFormOpen(false)}
+        busy={saving}
+        busyText="Creating vendor — uploading the PDF and saving to the sheet…"
       >
         <VendorForm
-          onCreated={() => { setFormOpen(false); reload(); }}
+          onCreated={handleCreated}
           onCancel={() => setFormOpen(false)}
+          onBusyChange={setSaving}
         />
       </Modal>
 
@@ -73,6 +91,17 @@ export default function VendorsPage() {
           <Banner tone="warn" icon={Plug}>
             Connect the Google Sheet (<code>VITE_SHEET_ID</code>) to list vendors here.
             The directory reads the <code>Vendors</code> tab.
+          </Banner>
+        </div>
+      )}
+
+      {connected && !canSave && (
+        <div style={{ marginBottom: 16 }}>
+          <Banner tone="warn" icon={Plug}>
+            Saving is not connected, so <strong>Create vendor</strong> cannot write to the
+            sheet yet. Deploy the Apps Script Web App and set <code>VITE_SHEET_API_URL</code>
+            {" "}in <code>.env</code> — see <code>apps-script/README.md</code>. Reading the
+            directory below works without it.
           </Banner>
         </div>
       )}

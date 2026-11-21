@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../../components/common/Button";
 import FileUpload from "../../components/common/FileUpload";
 import { Banner } from "../../components/common/States";
@@ -19,8 +19,12 @@ import { DOCUMENTS_HELP, EMPTY_VENDOR, makeVendorRules } from "./vendorFormRules
  *
  * "Create vendor" stays disabled until every mandatory field is valid and the
  * PDF is chosen. On success the form clears and the directory refreshes.
+ *
+ * `onBusyChange` lets the dialog show its own blocking spinner: uploading the
+ * PDF and appending the row can take several seconds, and nothing should be
+ * closed or re-submitted in the meantime.
  */
-export default function VendorForm({ onCreated, onCancel }) {
+export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
   const { user } = useAuth();
   const { list } = useSettings();
   const toast = useToast();
@@ -55,16 +59,32 @@ export default function VendorForm({ onCreated, onCancel }) {
     initialValues: EMPTY_VENDOR,
     rules,
     onSubmit: async (values, { reset }) => {
-      const code = await createVendor({ values, documents, user });
+      const { code, row } = await createVendor({ values, documents, user });
       reset();
       setDocuments(null);
       toast.success(`Vendor ${code} created`, `${values.Vendor_Name} is now in the directory.`);
-      onCreated?.(code);
+      onCreated?.({ code, row });
     },
   });
 
   const { errorFor, isValid, submitting, submitError, handleSubmit, reset } = form;
   const documentsError = errorFor("Documents");
+
+  useEffect(() => {
+    onBusyChange?.(submitting);
+  }, [submitting, onBusyChange]);
+
+  /**
+   * A save that fails writes its reason into a banner at the very top of a
+   * long form. The button that was just pressed is at the bottom, so without
+   * this the form simply appears to do nothing.
+   */
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!submitError) return;
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast.error("Vendor not created", submitError);
+  }, [submitError, toast]);
 
   const cancel = () => {
     reset();
@@ -76,7 +96,7 @@ export default function VendorForm({ onCreated, onCancel }) {
     <>
       <form onSubmit={handleSubmit} noValidate>
         {submitError && (
-          <div style={{ marginBottom: 16 }}>
+          <div ref={errorRef} style={{ marginBottom: 16 }}>
             <Banner tone="danger">{submitError}</Banner>
           </div>
         )}

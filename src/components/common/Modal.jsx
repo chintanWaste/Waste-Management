@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { Spinner } from "./States";
 
 /**
  * Centred dialog used by every "create" and "add" form.
@@ -8,6 +9,9 @@ import { X } from "lucide-react";
  * Keeps the directory in place behind it instead of pushing it down the page.
  * Closes on Escape and on a click outside, locks the background from
  * scrolling, and keeps the keyboard inside while it is open.
+ *
+ * While `busy` is set the dialog covers itself with a spinner and refuses
+ * every way out, so a save in flight cannot be abandoned half-written.
  */
 export default function Modal({
   open,
@@ -17,6 +21,8 @@ export default function Modal({
   onClose,
   children,
   closeOnBackdrop = true,
+  busy = false,
+  busyText = "Saving…",
 }) {
   const panelRef = useRef(null);
   const returnFocusTo = useRef(null);
@@ -32,7 +38,7 @@ export default function Modal({
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         event.stopPropagation();
-        onClose?.();
+        if (!busy) onClose?.();
         return;
       }
       if (event.key !== "Tab") return;
@@ -70,7 +76,7 @@ export default function Modal({
       clearTimeout(timer);
       returnFocusTo.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, busy]);
 
   if (!open) return null;
 
@@ -78,7 +84,7 @@ export default function Modal({
     <div
       className="modal"
       onMouseDown={(e) => {
-        if (closeOnBackdrop && e.target === e.currentTarget) onClose?.();
+        if (!busy && closeOnBackdrop && e.target === e.currentTarget) onClose?.();
       }}
     >
       <div
@@ -94,12 +100,25 @@ export default function Modal({
             <h2 className="modal__title">{title}</h2>
             {subtitle && <p className="modal__subtitle">{subtitle}</p>}
           </div>
-          <button type="button" className="modal__close" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="modal__close"
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+          >
             <X size={17} aria-hidden="true" />
           </button>
         </header>
 
         <div className="modal__body">{children}</div>
+
+        {busy && (
+          <div className="modal__busy" role="status" aria-live="polite">
+            <Spinner />
+            <div className="modal__busy-text">{busyText}</div>
+          </div>
+        )}
       </div>
     </div>,
     document.body

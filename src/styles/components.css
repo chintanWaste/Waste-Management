@@ -392,6 +392,7 @@
 }
 
 .modal__panel {
+  position: relative;
   width: 100%;
   background: var(--c-surface);
   border-radius: var(--r-lg);
@@ -401,6 +402,27 @@
   max-height: calc(100vh - 80px);
   animation: modalRise 0.18s cubic-bezier(0.2, 0.8, 0.3, 1);
   outline: none;
+}
+
+/* Covers the whole dialog while a save is in flight. */
+.modal__busy {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(2px);
+  cursor: progress;
+}
+
+.modal__busy-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-body);
 }
 
 .modal__panel--sm { max-width: 460px; }

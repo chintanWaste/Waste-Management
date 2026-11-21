@@ -45,8 +45,11 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           # Reading the sheet needs only the id, and the sheet is already shared
-          # publicly, so this one is a repository *variable*.
-          VITE_SHEET_ID: ${{ vars.VITE_SHEET_ID }}
+          # publicly as "anyone with the link — Viewer", so it is not a secret.
+          # The fallback is the live Chintan_Waste_Data sheet, so the deployed
+          # site reads real data without any repository configuration. Set a
+          # VITE_SHEET_ID repository variable to point a build at another sheet.
+          VITE_SHEET_ID: ${{ vars.VITE_SHEET_ID || '1vSTj0KwymQxn-UCUbzMxRL69y3CtCx7cq529siCS-zY' }}
           VITE_DRIVE_FOLDER_ID: ${{ vars.VITE_DRIVE_FOLDER_ID }}
           VITE_CACHE_MINUTES: ${{ vars.VITE_CACHE_MINUTES || '5' }}
           VITE_LOGO_URL: ${{ vars.VITE_LOGO_URL }}

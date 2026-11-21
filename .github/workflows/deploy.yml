@@ -4,6 +4,12 @@
 # own. The values come from the repository's secrets and variables instead —
 # see README.md, "Deploying". Without them the site still builds and loads, it
 # simply shows "Connect the Google Sheet" and no data.
+#
+# The built site is pushed to the gh-pages branch, because Pages for this repo
+# is set to "Deploy from a branch". That needs no repository settings change.
+# Switching Pages to the "GitHub Actions" source instead would require the
+# official deploy-pages action, and a workflow on main is refused by the
+# github-pages environment until that switch is made.
 name: Deploy to GitHub Pages
 
 on:
@@ -13,10 +19,9 @@ on:
   # having to make an empty commit.
   workflow_dispatch:
 
+# Pushing the built site to gh-pages is a write to the repository.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # Never let two publishes race. A run already in progress is allowed to finish.
 concurrency:
@@ -24,7 +29,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,16 +55,18 @@ jobs:
           VITE_SHEET_API_KEY: ${{ secrets.VITE_SHEET_API_KEY }}
         run: npm run build:pages
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to gh-pages
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # Stops Pages running the output through Jekyll.
+          touch dist/.nojekyll
+          cd dist
+          git init -q
+          git checkout -qb gh-pages
+          git add -A
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -qm "Deploy ${GITHUB_SHA}"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

@@ -13,7 +13,7 @@ function Section({ title, children }) {
 }
 
 /** Identity and address — section 7.1, first block. */
-export function VendorIdentitySection({ form, nextCode }) {
+export function VendorIdentitySection({ form, nextCode, codeHint }) {
   const { list } = useSettings();
   const { field, values, setMany } = form;
   const stateOptions = list(SETTING.states);
@@ -24,7 +24,7 @@ export function VendorIdentitySection({ form, nextCode }) {
         label="Vendor Code"
         value={nextCode}
         disabled
-        hint="Generated automatically and never reused"
+        hint={codeHint || "Generated automatically and never reused"}
       />
 
       <TextInput

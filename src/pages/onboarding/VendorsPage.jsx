@@ -1,4 +1,4 @@
-import { ExternalLink, Plug, Plus } from "lucide-react";
+import { ExternalLink, Eye, Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
@@ -10,18 +10,32 @@ import { Banner } from "../../components/common/States";
 import {
   VENDORS, isDriveConfigured, isWriteConfigured, writeUrlProblem,
 } from "../../config/driveSchema";
+import { useAuth } from "../../context/AuthContext";
+import { useToast } from "../../context/ToastContext";
 import { useSheetData } from "../../hooks/useSheetData";
 import { viewUrl } from "../../services/drive";
+import { deleteVendor } from "../../services/vendorService";
 import { date } from "../../utils/format";
+import VendorDetails from "./VendorDetails";
 import VendorForm from "./VendorForm";
+
+const isDeleted = (row) => String(row?.Status || "").toLowerCase() === "deleted";
 
 /** Sections 7.1–7.3 — Create vendor form at the top, directory below. */
 export default function VendorsPage() {
+  const { user } = useAuth();
+  const toast = useToast();
+
   const connected = isDriveConfigured();
   const canSave = isWriteConfigured();
   const urlProblem = writeUrlProblem();
+
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null); // the vendor row being edited
+  const [viewing, setViewing] = useState(null); // the vendor row being viewed
+  const [removing, setRemoving] = useState("");  // Vendor_Code currently deleting
+
   const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
 
   /**
@@ -35,6 +49,37 @@ export default function VendorsPage() {
       reload();
     },
     [addRow, reload]
+  );
+
+  const handleUpdated = useCallback(() => {
+    setEditing(null);
+    reload();
+  }, [reload]);
+
+  /**
+   * Deleting is soft: the Apps Script sets Status to Deleted and archives a
+   * copy to Deleted_Items, so this can be undone from the admin screens.
+   */
+  const handleDelete = useCallback(
+    async (row) => {
+      const confirmed = window.confirm(
+        `Delete vendor ${row.Vendor_Code} — ${row.Vendor_Name}?\n\n` +
+          "The record is marked Deleted and archived to Deleted_Items, not erased."
+      );
+      if (!confirmed) return;
+
+      setRemoving(row.Vendor_Code);
+      try {
+        await deleteVendor({ code: row.Vendor_Code, label: row.Vendor_Name, user });
+        toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been archived.`);
+        reload();
+      } catch (err) {
+        toast.error("Could not delete the vendor", err.message);
+      } finally {
+        setRemoving("");
+      }
+    },
+    [reload, toast, user]
   );
 
   const columns = [
@@ -52,12 +97,60 @@ export default function VendorsPage() {
       key: "Documents_File_Id",
       header: "Documents",
       sortable: false,
+      // The cell shows a short "PDF" link; an export needs the address itself,
+      // which is of no use as the word "PDF" in a spreadsheet.
+      exportValue: (r) => viewUrl(r.Documents_File_Id),
       render: (r) =>
         r.Documents_File_Id ? (
           <a href={viewUrl(r.Documents_File_Id)} target="_blank" rel="noreferrer" className="u-row" style={{ gap: 4 }}>
             PDF <ExternalLink size={12} aria-hidden="true" />
           </a>
         ) : "—",
+    },
+    {
+      key: "actions",
+      header: "",
+      sortable: false,
+      exportValue: () => "",
+      render: (r) => (
+        <div className="u-row" style={{ gap: 4 }}>
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => setViewing(r)}
+            title={`View ${r.Vendor_Code}`}
+          >
+            <Eye size={13} aria-hidden="true" />
+            View
+          </button>
+
+          {!isDeleted(r) && (
+            <>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setEditing(r)}
+                disabled={!canSave}
+                title={canSave ? `Edit ${r.Vendor_Code}` : "Saving is not connected"}
+              >
+                <Pencil size={13} aria-hidden="true" />
+                Edit
+              </button>
+
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => handleDelete(r)}
+                disabled={!canSave || removing === r.Vendor_Code}
+                title={canSave ? `Delete ${r.Vendor_Code}` : "Saving is not connected"}
+              >
+                <Trash2 size={13} aria-hidden="true" />
+                {removing === r.Vendor_Code ? "Deleting…" : "Delete"}
+              </button>
+            </>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -87,6 +180,47 @@ export default function VendorsPage() {
           onCancel={() => setFormOpen(false)}
           onBusyChange={setSaving}
         />
+      </Modal>
+
+      <Modal
+        open={Boolean(editing)}
+        title={`Edit Vendor ${editing?.Vendor_Code || ""}`}
+        subtitle="Change what you need — the documents PDF is only replaced if you choose a new one"
+        onClose={() => setEditing(null)}
+        busy={saving}
+        busyText="Saving changes to the sheet…"
+      >
+        {/* Keyed so switching rows rebuilds the form with the new values. */}
+        <VendorForm
+          key={editing?.Vendor_Code}
+          vendor={editing}
+          onCreated={handleUpdated}
+          onCancel={() => setEditing(null)}
+          onBusyChange={setSaving}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(viewing)}
+        title={`Vendor ${viewing?.Vendor_Code || ""}`}
+        subtitle={viewing?.Vendor_Name}
+        onClose={() => setViewing(null)}
+      >
+        <VendorDetails vendor={viewing} />
+        <div className="formactions">
+          <Button variant="secondary" onClick={() => setViewing(null)}>Close</Button>
+          {viewing && !isDeleted(viewing) && canSave && (
+            <Button
+              onClick={() => {
+                setEditing(viewing);
+                setViewing(null);
+              }}
+            >
+              <Pencil size={14} aria-hidden="true" />
+              Edit
+            </Button>
+          )}
+        </div>
       </Modal>
 
       {!connected && (

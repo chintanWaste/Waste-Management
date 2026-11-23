@@ -36,9 +36,13 @@ export const EMPTY_VENDOR = {
 /**
  * `documents` is the chosen File. `lists` carries the dropdown options read
  * from the Settings tab, so a value outside the list is rejected too.
+ *
+ * `requireDocuments` is false when editing a vendor that already has its PDF:
+ * choosing a new one replaces it, leaving it empty keeps the old one.
  */
 export function makeVendorRules({
   documents, existingPans = [], existingGstins = [], lists = {},
+  requireDocuments = true,
 }) {
   const isGst = (all) => all.GST_Registered === "Yes";
 
@@ -103,7 +107,40 @@ export function makeVendorRules({
     Branch_Name: r.placeName("Branch Name"),
     IFSC_Code: r.ifsc(),
 
-    Documents: r.requiredFile("The documents PDF", documents),
+    Documents: requireDocuments ? r.requiredFile("The documents PDF", documents) : () => "",
+  };
+}
+
+/** Fill the form from a vendor row, for editing. */
+export function vendorToForm(row = {}) {
+  const value = (key) => String(row[key] ?? "");
+
+  return {
+    ...EMPTY_VENDOR,
+    Vendor_Name: value("Vendor_Name"),
+    Vendor_Type: value("Vendor_Type"),
+    Vendor_Type_Other: value("Vendor_Type_Other"),
+    Address: value("Address"),
+    City_District: value("City_District"),
+    State: value("State"),
+    Pin_Code: value("Pin_Code"),
+    Contact_Person: value("Contact_Person"),
+    Phone: value("Phone"),
+    Email: value("Email"),
+    PAN_Number: value("PAN_Number"),
+    GST_Registered: value("GST_Registered"),
+    GST_Number: value("GST_Number"),
+    Onboarding_Date: value("Onboarding_Date"),
+    MoU_Type: value("MoU_Type"),
+    MoU_End_Date: value("MoU_End_Date"),
+    Bank_Account_Name: value("Bank_Account_Name"),
+    Bank_Name: value("Bank_Name"),
+    Account_Number: value("Account_Number"),
+    // Already confirmed when the vendor was created; re-typing it to edit an
+    // unrelated field would be busywork.
+    Account_Number_Confirm: value("Account_Number"),
+    Branch_Name: value("Branch_Name"),
+    IFSC_Code: value("IFSC_Code"),
   };
 }
 

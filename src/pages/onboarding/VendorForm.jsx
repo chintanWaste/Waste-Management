@@ -7,34 +7,49 @@ import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import { useForm } from "../../hooks/useForm";
-import { createVendor, loadVendorIdentifiers, nextVendorCode } from "../../services/vendorService";
+import {
+  createVendor, loadVendorIdentifiers, nextVendorCode, updateVendor,
+} from "../../services/vendorService";
 import {
   VendorBankSection, VendorComplianceSection,
   VendorContactSection, VendorIdentitySection,
 } from "./VendorFormSections";
-import { DOCUMENTS_HELP, EMPTY_VENDOR, makeVendorRules } from "./vendorFormRules";
+import {
+  DOCUMENTS_HELP, EMPTY_VENDOR, makeVendorRules, vendorToForm,
+} from "./vendorFormRules";
 
 /**
- * Create vendor — specification section 7.1 and 7.2.
+ * Create or edit a vendor — specification section 7.1 and 7.2.
  *
- * "Create vendor" stays disabled until every mandatory field is valid and the
- * PDF is chosen. On success the form clears and the directory refreshes.
+ * Passing `vendor` switches the form to editing that row: the fields start
+ * filled, the code is fixed, and the documents PDF becomes optional because
+ * one is already on file. The submit button stays disabled until every
+ * mandatory field is valid.
  *
  * `onBusyChange` lets the dialog show its own blocking spinner: uploading the
- * PDF and appending the row can take several seconds, and nothing should be
+ * PDF and writing the row can take several seconds, and nothing should be
  * closed or re-submitted in the meantime.
  */
-export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
+export default function VendorForm({ vendor, onCreated, onCancel, onBusyChange }) {
   const { user } = useAuth();
   const { list } = useSettings();
   const toast = useToast();
+
+  const editing = Boolean(vendor);
+  const editCode = vendor?.Vendor_Code || "";
 
   const [documents, setDocuments] = useState(null);
   const [identifiers, setIdentifiers] = useState({ pans: [], gstins: [], rows: [] });
 
   useEffect(() => {
-    loadVendorIdentifiers().then(setIdentifiers).catch(() => {});
-  }, []);
+    // Editing must not see this vendor's own PAN and GST as a duplicate.
+    loadVendorIdentifiers({ exceptCode: editCode }).then(setIdentifiers).catch(() => {});
+  }, [editCode]);
+
+  const initialValues = useMemo(
+    () => (editing ? vendorToForm(vendor) : EMPTY_VENDOR),
+    [editing, vendor]
+  );
 
   const lists = useMemo(
     () => ({
@@ -51,18 +66,27 @@ export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
       existingPans: identifiers.pans,
       existingGstins: identifiers.gstins,
       lists,
+      requireDocuments: !editing,
     }),
-    [documents, identifiers, lists]
+    [documents, identifiers, lists, editing]
   );
 
   const form = useForm({
-    initialValues: EMPTY_VENDOR,
+    initialValues,
     rules,
     onSubmit: async (values, { reset }) => {
-      const { code, row } = await createVendor({ values, documents, user });
+      const { code, row } = editing
+        ? await updateVendor({ code: editCode, values, documents, existing: vendor, user })
+        : await createVendor({ values, documents, user });
+
       reset();
       setDocuments(null);
-      toast.success(`Vendor ${code} created`, `${values.Vendor_Name} is now in the directory.`);
+      toast.success(
+        editing ? `Vendor ${code} updated` : `Vendor ${code} created`,
+        editing
+          ? `The changes to ${values.Vendor_Name} are saved.`
+          : `${values.Vendor_Name} is now in the directory.`
+      );
       onCreated?.({ code, row });
     },
   });
@@ -83,8 +107,8 @@ export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
   useEffect(() => {
     if (!submitError) return;
     errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    toast.error("Vendor not created", submitError);
-  }, [submitError, toast]);
+    toast.error(editing ? "Vendor not updated" : "Vendor not created", submitError);
+  }, [submitError, toast, editing]);
 
   const cancel = () => {
     reset();
@@ -101,7 +125,11 @@ export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
           </div>
         )}
 
-        <VendorIdentitySection form={form} nextCode={nextVendorCode(identifiers.rows)} />
+        <VendorIdentitySection
+          form={form}
+          nextCode={editing ? editCode : nextVendorCode(identifiers.rows)}
+          codeHint={editing ? "The code never changes once a vendor is created" : undefined}
+        />
         <VendorContactSection form={form} />
         <VendorComplianceSection form={form} />
         <VendorBankSection form={form} />
@@ -110,10 +138,14 @@ export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
           <div className="formsection__title">Documents</div>
           <FileUpload
             label="Documents"
-            required
+            required={!editing}
             accept="application/pdf"
             maxMb={5}
-            helpText={DOCUMENTS_HELP}
+            helpText={
+              editing
+                ? `A PDF is already on file. Choose one only to replace it. ${DOCUMENTS_HELP}`
+                : DOCUMENTS_HELP
+            }
             value={documents}
             error={documentsError}
             onChange={setDocuments}
@@ -125,13 +157,17 @@ export default function VendorForm({ onCreated, onCancel, onBusyChange }) {
             Cancel
           </Button>
           <Button type="submit" disabled={!isValid || submitting}>
-            {submitting ? "Creating…" : "Create vendor"}
+            {submitting
+              ? (editing ? "Saving…" : "Creating…")
+              : (editing ? "Save changes" : "Create vendor")}
           </Button>
         </div>
 
         {!isValid && (
           <p className="u-small u-muted" style={{ textAlign: "right", marginTop: 8 }}>
-            Fill in every required field and attach the PDF to enable this button.
+            {editing
+              ? "Fill in every required field to enable this button."
+              : "Fill in every required field and attach the PDF to enable this button."}
           </p>
         )}
       </form>

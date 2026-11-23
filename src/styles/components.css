@@ -382,7 +382,9 @@
   inset: 0;
   z-index: 70;
   display: flex;
-  align-items: flex-start;
+  /* Centred in the viewport. The panel caps its own height and scrolls
+     inside, so centring cannot push its top off the screen. */
+  align-items: center;
   justify-content: center;
   padding: 40px 20px;
   overflow-y: auto;
@@ -394,6 +396,10 @@
 .modal__panel {
   position: relative;
   width: 100%;
+  /* Keeps the panel centred, and correctly reachable if it ever does
+     overflow — a flex item overflowing a centred container cannot be
+     scrolled to without this. */
+  margin: auto;
   background: var(--c-surface);
   border-radius: var(--r-lg);
   box-shadow: 0 24px 64px rgba(10, 30, 23, 0.28);

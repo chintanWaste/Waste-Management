@@ -7,7 +7,8 @@
  */
 
 import { DRIVERS, MMRFS, VEHICLES, isWriteConfigured } from "../config/driveSchema";
-import { appendRow, readTab, uploadFile } from "./sheetsApi";
+import { viewUrl } from "./drive";
+import { appendRow, deleteRow, readTab, updateRow, uploadFile } from "./sheetsApi";
 
 /** Codes are never reused (section 4.3). */
 export function nextCode(rows, column, prefix) {
@@ -30,6 +31,52 @@ function requireWrite() {
 }
 
 const safeName = (s) => String(s).replace(/[\\/:*?"<>|]/g, "-");
+
+/* ------------------------------------------------- shared edit and delete */
+
+/**
+ * Soft-delete any record: Status becomes Deleted and a copy is archived to
+ * Deleted_Items by the Apps Script, so nothing is ever actually lost.
+ *
+ * `tab` is a TABS entry from config/driveSchema.js, which carries its own
+ * idColumn, so no caller has to remember which column identifies a record.
+ */
+export async function deleteRecord({ tab, id, label, user }) {
+  requireWrite();
+
+  await deleteRow(tab.tab, tab.idColumn, id, {
+    label: label || id,
+    user: user?.id || "",
+  });
+
+  return { id };
+}
+
+/**
+ * Patch any record, stamping who changed it and when.
+ *
+ * `patch` holds only the columns that change; everything else on the row is
+ * left exactly as it was.
+ */
+export async function updateRecord({ tab, id, patch, user }) {
+  requireWrite();
+
+  const fields = {
+    ...patch,
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  };
+
+  await updateRow(tab.tab, tab.idColumn, id, fields);
+
+  return { id, patch: fields };
+}
+
+/** Upload a replacement document and return the link to store. */
+export async function uploadDocument({ file, folder = "Documents", name }) {
+  const fileId = await uploadFile(file, { folder, name: safeName(name) });
+  return viewUrl(fileId);
+}
 
 /* --------------------------------------------------------------- MMRF (9) */
 

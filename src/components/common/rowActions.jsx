@@ -1,6 +1,12 @@
 import { Eye, Pencil, Trash2 } from "lucide-react";
 
-/** A record the user has removed is read-only: it can be viewed, nothing more. */
+/**
+ * A row left over from when deleting only set a status.
+ *
+ * Deleting now removes the row outright, so these only appear in sheets
+ * written by the earlier behaviour. They cannot be edited — the record is
+ * meant to be gone — but Delete stays available so they can be cleared out.
+ */
 export const isDeletedRow = (row) =>
   String(row?.Status || "").toLowerCase() === "deleted";
 
@@ -66,7 +72,7 @@ export function rowActionsColumn({
             </button>
           )}
 
-          {onDelete && !deleted && (
+          {onDelete && (
             <button
               type="button"
               className="btn btn--ghost btn--sm"

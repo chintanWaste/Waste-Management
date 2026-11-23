@@ -68,7 +68,7 @@ export default function VendorsPage() {
     setRemoving(row.Vendor_Code);
     try {
       await deleteVendor({ code: row.Vendor_Code, label: row.Vendor_Name, user });
-      toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been archived.`);
+      toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been removed from the sheet and archived.`);
       setConfirming(null);
       reload();
     } catch (err) {
@@ -189,10 +189,10 @@ export default function VendorsPage() {
         subtitle={confirming ? `${confirming.Vendor_Code} — ${confirming.Vendor_Name}` : ""}
         message={
           confirming
-            ? `${confirming.Vendor_Name} will no longer appear as an active vendor.`
+            ? `${confirming.Vendor_Name} will be removed from the Vendors tab of the sheet.`
             : ""
         }
-        note="Nothing is erased: the record is marked Deleted and a copy is archived to Deleted_Items, so it can be restored."
+        note="A full copy is archived to Deleted_Items before the row is removed, so it can still be restored."
         confirmLabel="Delete vendor"
         busy={Boolean(removing)}
         busyText="Deleting and archiving…"

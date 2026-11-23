@@ -135,14 +135,26 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 980px) {
-  .login { grid-template-columns: 1fr; }
-  .login__brandpane { display: none; }
-  .login__mobilebrand { display: flex; }
   /* The brand panel is hidden here, so the card is the whole page and stays
      centred, as it is on a wide screen. It used to be pinned to the top. */
+  .login { grid-template-columns: 1fr; position: relative; }
+  .login__brandpane { display: none; }
+
+  /* The logo belongs to the page, not to the card, so it sits in the corner
+     and is taken out of the flow — otherwise it adds its own height to the
+     card and pushes the sign-in fields off centre. */
+  .login__mobilebrand {
+    display: flex;
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    margin-bottom: 0;
+  }
 }
 
 @media (max-width: 420px) {
   .login__formpane { padding: 28px 16px; }
   .login__heading { font-size: 21px; }
+  /* Line the logo up with the narrower page padding. */
+  .login__mobilebrand { top: 16px; left: 16px; }
 }

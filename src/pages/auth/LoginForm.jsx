@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import Button from "../../components/common/Button";
 import { Banner } from "../../components/common/States";
@@ -57,8 +58,15 @@ export default function LoginForm() {
             type="button"
             className="login__pwtoggle"
             onClick={() => setShowPassword((v) => !v)}
+            // The icon carries no text, so the control needs its own label
+            // and has to say which state it is in, not just what it shows.
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            title={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? "Hide" : "Show"}
+            {showPassword
+              ? <EyeOff size={17} aria-hidden="true" />
+              : <Eye size={17} aria-hidden="true" />}
           </button>
         </div>
       </div>

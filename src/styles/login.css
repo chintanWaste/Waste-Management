@@ -112,13 +112,24 @@
 .login__form { display: flex; flex-direction: column; gap: 16px; margin-top: 26px; }
 
 .login__pwwrap { position: relative; }
+/* Keeps a long password from running underneath the eye button. */
+.login__pwwrap .input { padding-right: 46px; }
 .login__pwtoggle {
   position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
   background: none; border: none; cursor: pointer;
-  color: var(--c-muted); font-size: 11.5px; font-weight: 600;
-  padding: 5px 7px; border-radius: 6px;
+  color: var(--c-muted);
+  /* Square and centred for the icon, and wide enough to be an easy tap
+     target on a phone. */
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  padding: 0; border-radius: 6px;
 }
 .login__pwtoggle:hover { background: var(--c-surface-2); color: var(--c-body); }
+.login__pwtoggle:focus-visible {
+  outline: 2px solid var(--c-brand-600);
+  outline-offset: 1px;
+  color: var(--c-body);
+}
 
 .login__submit { margin-top: 4px; padding: 12px; font-size: 14px; }
 

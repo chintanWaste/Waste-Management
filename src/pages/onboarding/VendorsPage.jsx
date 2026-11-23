@@ -1,5 +1,5 @@
 import { ExternalLink, Pencil, Plug, Plus } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -38,6 +38,16 @@ export default function VendorsPage() {
   const [removing, setRemoving] = useState("");       // Vendor_Code currently deleting
 
   const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
+
+  /**
+   * A deleted vendor is not part of the directory.
+   *
+   * Deleting removes the row outright, so normally there is nothing to filter.
+   * This covers rows left behind by the earlier behaviour, which only set the
+   * status — and keeps the list correct if the deployed Apps Script is still
+   * that older version.
+   */
+  const liveRows = useMemo(() => rows.filter((r) => !isDeletedRow(r)), [rows]);
 
   /**
    * The new vendor goes into the table before the refetch, because the Sheet
@@ -229,7 +239,7 @@ export default function VendorsPage() {
       <Card title="Vendor Directory" flush>
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={liveRows}
           loading={loading}
           error={error}
           onRetry={reload}

@@ -2,6 +2,10 @@
 
 .login {
   min-height: 100vh;
+  /* On a phone, 100vh is the window with the browser's address bar hidden, so
+     it leaves the page a little taller than the screen and scrollable. dvh is
+     the height actually visible. */
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 1.05fr 1fr;
   background: var(--c-bg);
@@ -93,6 +97,10 @@
 .login__card {
   width: 100%;
   max-width: 400px;
+  /* Keeps the card centred, and still fully reachable on a short screen —
+     a centred grid item taller than its track would otherwise have its top
+     cut off with no way to scroll to it. */
+  margin: auto;
 }
 
 .login__mobilebrand { display: none; align-items: center; gap: 10px; margin-bottom: 22px; }
@@ -130,7 +138,8 @@
   .login { grid-template-columns: 1fr; }
   .login__brandpane { display: none; }
   .login__mobilebrand { display: flex; }
-  .login__formpane { align-items: flex-start; padding-top: 48px; }
+  /* The brand panel is hidden here, so the card is the whole page and stays
+     centred, as it is on a wide screen. It used to be pinned to the top. */
 }
 
 @media (max-width: 420px) {

@@ -44,7 +44,59 @@ export const DRIVE = {
 };
 
 export const isDriveConfigured = () => Boolean(DRIVE.sheetId);
+
+/** True once a write URL of any kind has been configured. */
 export const isWriteConfigured = () => Boolean(DRIVE.apiUrl);
+
+/**
+ * A deployed Apps Script Web App. Two shapes are valid:
+ *   https://script.google.com/macros/s/<deploymentId>/exec
+ *   https://script.google.com/a/macros/<domain>/s/<deploymentId>/exec  (Workspace)
+ */
+const WEB_APP_URL =
+  /^https:\/\/script\.google\.com\/(a\/macros\/[^/]+|macros)\/s\/[^/]+\/exec$/;
+
+/**
+ * Why a write URL cannot be used, or "" if it looks right.
+ *
+ * Posting to anything other than a deployed Web App fails as a CORS error,
+ * because whatever answers is ordinary Google HTML with no
+ * Access-Control-Allow-Origin header. The browser reports that as a bare
+ * "Failed to fetch", which says nothing about the real mistake, so the shape
+ * of the URL is checked here instead and the problem named precisely.
+ *
+ * Kept separate from DRIVE so it can be exercised without a Vite environment.
+ */
+export function describeWriteUrl(url) {
+  if (!url) return "";
+  if (WEB_APP_URL.test(url)) return "";
+
+  // By far the most common mix-up: the address bar of the Apps Script editor.
+  if (/script\.google\.com\/.*(projects|\/edit)/.test(url)) {
+    return (
+      "VITE_SHEET_API_URL is the Apps Script editor page, not the deployed Web App. " +
+      "The editor URL carries the script id; the Web App URL carries a different " +
+      "deployment id and ends in /exec. In the Apps Script editor use " +
+      "Deploy > New deployment > Web app — or Deploy > Manage deployments if one " +
+      "already exists — and copy the Web app URL."
+    );
+  }
+
+  if (/docs\.google\.com/.test(url)) {
+    return (
+      "VITE_SHEET_API_URL is the spreadsheet's own address, not the Apps Script Web App. " +
+      "It should look like https://script.google.com/macros/s/<id>/exec."
+    );
+  }
+
+  return (
+    "VITE_SHEET_API_URL does not look like a deployed Apps Script Web App. " +
+    `It should look like https://script.google.com/macros/s/<id>/exec, not "${url}".`
+  );
+}
+
+/** Why the configured write URL cannot be used, or "" if it looks right. */
+export const writeUrlProblem = () => describeWriteUrl(DRIVE.apiUrl);
 
 /** Read a whole tab as CSV through the gviz endpoint. */
 export const sheetCsvUrl = (tabName) =>

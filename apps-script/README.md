@@ -38,6 +38,14 @@ https://drive.google.com/drive/folders/<THIS IS THE FOLDER ID>
    expected for your own script — choose *Advanced → Go to … (unsafe)*.
 5. Copy the **Web app URL**. It ends in `/exec`.
 
+> **The editor URL is not the Web App URL.** The address bar while you are editing
+> the script looks like
+> `https://script.google.com/u/0/home/projects/<scriptId>/edit`. That is the code
+> editor: it does not accept requests, so posting to it fails in the browser as a
+> CORS error. The Web App URL is a *different* address containing a *deployment*
+> id, and it ends in `/exec`. Take it from the deployment dialog, or from
+> **Deploy → Manage deployments**.
+
 > After *any* later edit to `Code.gs` you must run **Deploy → Manage deployments →
 > edit → New version**. Saving alone does not update the live URL.
 

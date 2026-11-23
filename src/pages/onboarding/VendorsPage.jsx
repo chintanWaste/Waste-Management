@@ -7,7 +7,9 @@ import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import PageHeader from "../../components/common/PageHeader";
 import { Banner } from "../../components/common/States";
-import { VENDORS, isDriveConfigured, isWriteConfigured } from "../../config/driveSchema";
+import {
+  VENDORS, isDriveConfigured, isWriteConfigured, writeUrlProblem,
+} from "../../config/driveSchema";
 import { useSheetData } from "../../hooks/useSheetData";
 import { viewUrl } from "../../services/drive";
 import { date } from "../../utils/format";
@@ -17,6 +19,7 @@ import VendorForm from "./VendorForm";
 export default function VendorsPage() {
   const connected = isDriveConfigured();
   const canSave = isWriteConfigured();
+  const urlProblem = writeUrlProblem();
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
@@ -92,6 +95,12 @@ export default function VendorsPage() {
             Connect the Google Sheet (<code>VITE_SHEET_ID</code>) to list vendors here.
             The directory reads the <code>Vendors</code> tab.
           </Banner>
+        </div>
+      )}
+
+      {urlProblem && (
+        <div style={{ marginBottom: 16 }}>
+          <Banner tone="danger">{urlProblem}</Banner>
         </div>
       )}
 

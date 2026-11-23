@@ -6,7 +6,9 @@
  */
 
 import Papa from "papaparse";
-import { DRIVE, isDriveConfigured, isWriteConfigured, sheetCsvUrl } from "../config/driveSchema";
+import {
+  DRIVE, isDriveConfigured, isWriteConfigured, sheetCsvUrl, writeUrlProblem,
+} from "../config/driveSchema";
 
 const cache = new Map(); // tabName -> { at, rows }
 
@@ -76,12 +78,32 @@ async function callApi(action, payload) {
     );
   }
 
-  const res = await fetch(DRIVE.apiUrl, {
-    method: "POST",
-    // text/plain avoids a CORS preflight that Apps Script cannot answer.
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, key: DRIVE.apiKey, ...payload }),
-  });
+  // Checked before the request: posting to the wrong Google page fails as an
+  // opaque CORS error, which tells nobody what actually went wrong.
+  const problem = writeUrlProblem();
+  if (problem) throw new Error(problem);
+
+  let res;
+  try {
+    res = await fetch(DRIVE.apiUrl, {
+      method: "POST",
+      // text/plain avoids a CORS preflight that Apps Script cannot answer.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ action, key: DRIVE.apiKey, ...payload }),
+    });
+  } catch {
+    /*
+     * fetch only throws when the request never completed at all, and the
+     * browser deliberately withholds the reason. In practice it is one of
+     * these three, so say so rather than passing on "Failed to fetch".
+     */
+    throw new Error(
+      `Could not reach the save endpoint at ${DRIVE.apiUrl} — the request was blocked ` +
+        "before it completed. Usually this means the Web App is not deployed with " +
+        '"Who has access: Anyone", the deployment has been deleted, or there is no ' +
+        "network connection."
+    );
+  }
 
   if (!res.ok) throw new Error(`Save failed (HTTP ${res.status}).`);
 

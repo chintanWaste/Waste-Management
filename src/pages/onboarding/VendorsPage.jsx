@@ -1,11 +1,13 @@
-import { ExternalLink, Eye, Pencil, Plug, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Pencil, Plug, Plus } from "lucide-react";
 import { useCallback, useState } from "react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
 import DataTable from "../../components/common/DataTable";
 import Modal from "../../components/common/Modal";
 import PageHeader from "../../components/common/PageHeader";
+import { isDeletedRow, rowActionsColumn } from "../../components/common/rowActions";
 import { Banner } from "../../components/common/States";
 import {
   VENDORS, isDriveConfigured, isWriteConfigured, writeUrlProblem,
@@ -18,8 +20,6 @@ import { deleteVendor } from "../../services/vendorService";
 import { date } from "../../utils/format";
 import VendorDetails from "./VendorDetails";
 import VendorForm from "./VendorForm";
-
-const isDeleted = (row) => String(row?.Status || "").toLowerCase() === "deleted";
 
 /** Sections 7.1–7.3 — Create vendor form at the top, directory below. */
 export default function VendorsPage() {
@@ -34,7 +34,8 @@ export default function VendorsPage() {
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null); // the vendor row being edited
   const [viewing, setViewing] = useState(null); // the vendor row being viewed
-  const [removing, setRemoving] = useState("");  // Vendor_Code currently deleting
+  const [confirming, setConfirming] = useState(null); // the vendor awaiting a delete confirmation
+  const [removing, setRemoving] = useState("");       // Vendor_Code currently deleting
 
   const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
 
@@ -60,27 +61,22 @@ export default function VendorsPage() {
    * Deleting is soft: the Apps Script sets Status to Deleted and archives a
    * copy to Deleted_Items, so this can be undone from the admin screens.
    */
-  const handleDelete = useCallback(
-    async (row) => {
-      const confirmed = window.confirm(
-        `Delete vendor ${row.Vendor_Code} — ${row.Vendor_Name}?\n\n` +
-          "The record is marked Deleted and archived to Deleted_Items, not erased."
-      );
-      if (!confirmed) return;
+  const confirmDelete = useCallback(async () => {
+    const row = confirming;
+    if (!row) return;
 
-      setRemoving(row.Vendor_Code);
-      try {
-        await deleteVendor({ code: row.Vendor_Code, label: row.Vendor_Name, user });
-        toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been archived.`);
-        reload();
-      } catch (err) {
-        toast.error("Could not delete the vendor", err.message);
-      } finally {
-        setRemoving("");
-      }
-    },
-    [reload, toast, user]
-  );
+    setRemoving(row.Vendor_Code);
+    try {
+      await deleteVendor({ code: row.Vendor_Code, label: row.Vendor_Name, user });
+      toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been archived.`);
+      setConfirming(null);
+      reload();
+    } catch (err) {
+      toast.error("Could not delete the vendor", err.message);
+    } finally {
+      setRemoving("");
+    }
+  }, [confirming, reload, toast, user]);
 
   const columns = [
     { key: "Vendor_Code", header: "Code", render: (r) => <span className="table__code">{r.Vendor_Code}</span> },
@@ -107,51 +103,15 @@ export default function VendorsPage() {
           </a>
         ) : "—",
     },
-    {
-      key: "actions",
-      header: "",
-      sortable: false,
-      exportValue: () => "",
-      render: (r) => (
-        <div className="u-row" style={{ gap: 4 }}>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => setViewing(r)}
-            title={`View ${r.Vendor_Code}`}
-          >
-            <Eye size={13} aria-hidden="true" />
-            View
-          </button>
-
-          {!isDeleted(r) && (
-            <>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => setEditing(r)}
-                disabled={!canSave}
-                title={canSave ? `Edit ${r.Vendor_Code}` : "Saving is not connected"}
-              >
-                <Pencil size={13} aria-hidden="true" />
-                Edit
-              </button>
-
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => handleDelete(r)}
-                disabled={!canSave || removing === r.Vendor_Code}
-                title={canSave ? `Delete ${r.Vendor_Code}` : "Saving is not connected"}
-              >
-                <Trash2 size={13} aria-hidden="true" />
-                {removing === r.Vendor_Code ? "Deleting…" : "Delete"}
-              </button>
-            </>
-          )}
-        </div>
-      ),
-    },
+    rowActionsColumn({
+      idKey: "Vendor_Code",
+      canWrite: canSave,
+      busyId: removing,
+      labelFor: (r) => r.Vendor_Code,
+      onView: setViewing,
+      onEdit: setEditing,
+      onDelete: setConfirming,
+    }),
   ];
 
   return (
@@ -209,7 +169,7 @@ export default function VendorsPage() {
         <VendorDetails vendor={viewing} />
         <div className="formactions">
           <Button variant="secondary" onClick={() => setViewing(null)}>Close</Button>
-          {viewing && !isDeleted(viewing) && canSave && (
+          {viewing && !isDeletedRow(viewing) && canSave && (
             <Button
               onClick={() => {
                 setEditing(viewing);
@@ -222,6 +182,23 @@ export default function VendorsPage() {
           )}
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={Boolean(confirming)}
+        title="Delete this vendor?"
+        subtitle={confirming ? `${confirming.Vendor_Code} — ${confirming.Vendor_Name}` : ""}
+        message={
+          confirming
+            ? `${confirming.Vendor_Name} will no longer appear as an active vendor.`
+            : ""
+        }
+        note="Nothing is erased: the record is marked Deleted and a copy is archived to Deleted_Items, so it can be restored."
+        confirmLabel="Delete vendor"
+        busy={Boolean(removing)}
+        busyText="Deleting and archiving…"
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirming(null)}
+      />
 
       {!connected && (
         <div style={{ marginBottom: 16 }}>

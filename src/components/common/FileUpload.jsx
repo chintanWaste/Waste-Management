@@ -1,4 +1,4 @@
-import { FileText, Info, UploadCloud } from "lucide-react";
+import { ExternalLink, FileText, Info, UploadCloud } from "lucide-react";
 import { useRef, useState } from "react";
 import { Field } from "./Field";
 
@@ -6,6 +6,11 @@ import { Field } from "./Field";
  * Single-file upload with a size limit (section 4.5).
  * The file is held in state until the form is submitted; only then is it
  * uploaded to Drive, so an abandoned form leaves nothing behind.
+ *
+ * `existingUrl` is a file already on record, shown when editing so it is clear
+ * one is held and what it is. Choosing a new file replaces it; leaving it
+ * alone keeps it. With no file on record the control starts empty, exactly as
+ * it does when creating.
  */
 export default function FileUpload({
   label,
@@ -16,6 +21,8 @@ export default function FileUpload({
   maxMb = 5,
   value,
   onChange,
+  existingUrl = "",
+  existingLabel = "File already on record",
 }) {
   const inputRef = useRef(null);
   const [sizeError, setSizeError] = useState("");
@@ -66,35 +73,64 @@ export default function FileUpload({
           </button>
         </div>
       ) : (
-        <div
-          className={`upload__drop ${dragging ? "upload__drop--over" : ""} ${
-            error || sizeError ? "upload__drop--error" : ""
-          }`}
-          onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            take(e.dataTransfer.files?.[0]);
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
+        <>
+          {existingUrl && (
+            <div className="upload__file" style={{ marginBottom: 10 }}>
+              <FileText
+                size={20}
+                aria-hidden="true"
+                style={{ color: "var(--c-brand-700)", flex: "0 0 auto" }}
+              />
+              <div className="u-grow">
+                <div className="upload__filename">{existingLabel}</div>
+                <div className="u-small u-muted">
+                  Keeping this unless you choose a new file below
+                </div>
+              </div>
+              <a
+                href={existingUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn--ghost btn--sm"
+              >
+                Open <ExternalLink size={12} aria-hidden="true" />
+              </a>
+            </div>
+          )}
+
+          <div
+            className={`upload__drop ${dragging ? "upload__drop--over" : ""} ${
+              error || sizeError ? "upload__drop--error" : ""
+            }`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => {
               e.preventDefault();
-              inputRef.current?.click();
-            }
-          }}
-        >
-          <UploadCloud className="upload__icon" size={24} strokeWidth={1.6} aria-hidden="true" />
-          <div>
-            <b>Click to choose a file</b> or drag it here
+              setDragging(false);
+              take(e.dataTransfer.files?.[0]);
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                inputRef.current?.click();
+              }
+            }}
+          >
+            <UploadCloud className="upload__icon" size={24} strokeWidth={1.6} aria-hidden="true" />
+            <div>
+              <b>
+                {existingUrl ? "Click to choose a replacement" : "Click to choose a file"}
+              </b>{" "}
+              or drag it here
+            </div>
+            <div className="u-small u-muted">
+              One {accept.includes("pdf") ? "PDF" : "file"}, maximum {maxMb} MB
+            </div>
           </div>
-          <div className="u-small u-muted">
-            One {accept.includes("pdf") ? "PDF" : "file"}, maximum {maxMb} MB
-          </div>
-        </div>
+        </>
       )}
 
       <input

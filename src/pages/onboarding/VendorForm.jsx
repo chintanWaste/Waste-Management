@@ -7,6 +7,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import { useForm } from "../../hooks/useForm";
+import { viewUrl } from "../../services/drive";
 import {
   createVendor, loadVendorIdentifiers, nextVendorCode, updateVendor,
 } from "../../services/vendorService";
@@ -37,6 +38,10 @@ export default function VendorForm({ vendor, onCreated, onCancel, onBusyChange }
 
   const editing = Boolean(vendor);
   const editCode = vendor?.Vendor_Code || "";
+
+  // Empty when the vendor has no PDF on record, so the control starts blank
+  // exactly as it does when creating one.
+  const existingDocuments = editing ? viewUrl(vendor.Documents_File_Id) : "";
 
   const [documents, setDocuments] = useState(null);
   const [identifiers, setIdentifiers] = useState({ pans: [], gstins: [], rows: [] });
@@ -142,13 +147,15 @@ export default function VendorForm({ vendor, onCreated, onCancel, onBusyChange }
             accept="application/pdf"
             maxMb={5}
             helpText={
-              editing
+              editing && existingDocuments
                 ? `A PDF is already on file. Choose one only to replace it. ${DOCUMENTS_HELP}`
                 : DOCUMENTS_HELP
             }
             value={documents}
             error={documentsError}
             onChange={setDocuments}
+            existingUrl={existingDocuments}
+            existingLabel={`${editCode} documents PDF`}
           />
         </div>
 

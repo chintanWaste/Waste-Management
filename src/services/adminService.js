@@ -466,6 +466,22 @@ export async function saveSetting({ key, value, description, user }) {
 }
 
 /**
+ * "Unknown action" means the Web App is serving a deployment older than the
+ * feature being called. Say what to do about it, rather than passing on a
+ * message that only means something to whoever wrote the script.
+ */
+function dropdownProblem(err) {
+  const message = String(err?.message || err);
+  if (!/unknown action/i.test(message)) return message;
+
+  return (
+    "the Google Sheet's script is running an older version. In the Sheet: " +
+    "Extensions > Apps Script, paste in apps-script/Code.gs, Save, then " +
+    "Deploy > Manage deployments > edit > Version: New version > Deploy."
+  );
+}
+
+/**
  * Save a dropdown list back to the Sheet as one pipe-separated cell, and put
  * the same values on the Sheet's own columns as a data-validation dropdown.
  *
@@ -489,7 +505,7 @@ export async function saveList({ key, values, description, user }) {
     const out = await setValidation(targets, clean);
     return { count: clean.length, columns: out.applied || 0, dropdownError: "" };
   } catch (err) {
-    return { count: clean.length, columns: 0, dropdownError: err.message };
+    return { count: clean.length, columns: 0, dropdownError: dropdownProblem(err) };
   }
 }
 
@@ -515,7 +531,8 @@ export async function rebuildSheetDropdowns(listsByKey) {
       const out = await setValidation(targets, clean);
       columns += out.applied || 0;
     } catch (err) {
-      failed.push(`${key}: ${err.message}`);
+      const problem = dropdownProblem(err);
+      if (!failed.includes(problem)) failed.push(problem);
     }
   }
 

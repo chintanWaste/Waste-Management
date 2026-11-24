@@ -5,6 +5,7 @@ import AuditLogPage from "../pages/admin/AuditLogPage";
 import DeletedItemsPage from "../pages/admin/DeletedItemsPage";
 import MasterListsPage from "../pages/admin/MasterListsPage";
 import SettingsPage from "../pages/admin/SettingsPage";
+import SupervisorsPage from "../pages/admin/SupervisorsPage";
 import UsersPage from "../pages/admin/UsersPage";
 import WasteCategoriesPage from "../pages/admin/WasteCategoriesPage";
 import LoginPage from "../pages/auth/LoginPage";
@@ -31,6 +32,7 @@ const SUPER_ADMIN_PAGES = [
   ["/admin/waste-categories", WasteCategoriesPage],
   ["/certificates", CertificatesPage],
   ["/admin/users", UsersPage],
+  ["/admin/supervisors", SupervisorsPage],
   ["/admin/approvals", ApprovalsPage],
   ["/admin/deleted-items", DeletedItemsPage],
   ["/admin/master-lists", MasterListsPage],

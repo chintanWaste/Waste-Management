@@ -68,6 +68,7 @@ export const MENU = [
         superAdminOnly: true,
         children: [
           { key: "users", label: "Users", path: "/admin/users" },
+          { key: "supervisors", label: "Supervisors", path: "/admin/supervisors" },
           { key: "approvals", label: "Approvals", path: "/admin/approvals" },
           { key: "deleted", label: "Deleted items", path: "/admin/deleted-items" },
           { key: "categories", label: "Waste categories", path: "/admin/waste-categories" },

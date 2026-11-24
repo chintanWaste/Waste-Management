@@ -38,7 +38,11 @@ export const EMPTY_BWG = {
   Bank_Address: "",
 };
 
-export function makeBwgRules({ documents, lists = {} }) {
+/**
+ * `requireDocuments` is false when editing a BWG that already has its PDF:
+ * choosing a new one replaces it, leaving it empty keeps the old one.
+ */
+export function makeBwgRules({ documents, lists = {}, requireDocuments = true }) {
   const hasPan = (all) => all.PAN_Not_Available !== "Yes";
   const isGst = (all) => all.GST_Registered === "Yes";
 
@@ -85,7 +89,7 @@ export function makeBwgRules({ documents, lists = {} }) {
     Branch_Name: r.placeName("Branch Name"),
     Bank_Address: r.address("Bank Address", { min: 6 }),
 
-    Documents: r.requiredFile("The documents PDF", documents),
+    Documents: requireDocuments ? r.requiredFile("The documents PDF", documents) : () => "",
   };
 }
 
@@ -113,3 +117,14 @@ export const DOCUMENTS_HELP =
   "Upload one PDF (max 5 MB) containing: agreement / MoU between the BWG and Chintan; " +
   "GST certificate (if GST-registered); PAN card (if available); cancelled cheque; and any " +
   "other relevant document such as an authorisation letter or work order.";
+
+/** Fill the form from a BWG row, for editing. */
+export function bwgToForm(row = {}) {
+  const out = { ...EMPTY_BWG };
+  for (const key of Object.keys(EMPTY_BWG)) {
+    out[key] = String(row[key] ?? "");
+  }
+  // Blank would fail the Yes/No rule on a row written before the column existed.
+  out.PAN_Not_Available = out.PAN_Not_Available || "No";
+  return out;
+}

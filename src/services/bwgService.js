@@ -7,7 +7,63 @@
  */
 
 import { BWGS, LINKAGE, VENDORS, isWriteConfigured } from "../config/driveSchema";
-import { appendRow, readTab, uploadFile } from "./sheetsApi";
+import { viewUrl } from "./drive";
+import { appendRow, deleteRow, readTab, updateRow, uploadFile } from "./sheetsApi";
+
+function requireWrite() {
+  if (!isWriteConfigured()) {
+    throw new Error(
+      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
+        "VITE_SHEET_API_URL in app/.env, then try again."
+    );
+  }
+}
+
+/**
+ * Put the documents PDF in Drive and return the link to store.
+ *
+ * The full Drive URL is stored rather than a bare id, so the cell is useful
+ * on its own — clickable in the sheet and in an export.
+ */
+async function uploadDocuments(documents, code, name) {
+  const fileId = await uploadFile(documents, {
+    folder: "Documents",
+    name: `${code}_${name}_documents.pdf`.replace(/[\\/:*?"<>|]/g, "-"),
+  });
+  return viewUrl(fileId);
+}
+
+/** The sheet columns that come straight from the form, shared by create and edit. */
+function fieldsFromForm(values) {
+  const panAvailable = values.PAN_Not_Available !== "Yes";
+
+  return {
+    BWG_Name: values.BWG_Name.trim(),
+    BWG_Type: values.BWG_Type,
+    BWG_Type_Other: values.BWG_Type === "Others" ? values.BWG_Type_Other.trim() : "",
+    Area: values.Area,
+    Operation_Type: values.Operation_Type,
+    Onboarding_Date: values.Onboarding_Date,
+    Address: values.Address.trim(),
+    Pin_Code: values.Pin_Code,
+    Ward_Zone: values.Ward_Zone.trim(),
+    Contact_Person: values.Contact_Person.trim(),
+    Phone: values.Phone,
+    Email: values.Email.trim(),
+    Collection_Frequency: values.Collection_Frequency,
+    GST_Registered: values.GST_Registered,
+    GST_Number: values.GST_Registered === "Yes" ? values.GST_Number.toUpperCase() : "",
+    PAN_Number: panAvailable ? values.PAN_Number.toUpperCase() : "",
+    PAN_Not_Available: values.PAN_Not_Available,
+    Agreement_Type: values.Agreement_Type,
+    Bank_Account_Name: values.Bank_Account_Name.trim(),
+    Bank_Name: values.Bank_Name.trim(),
+    Account_Number: values.Account_Number,
+    IFSC_Code: values.IFSC_Code.toUpperCase(),
+    Branch_Name: values.Branch_Name.trim(),
+    Bank_Address: values.Bank_Address.trim(),
+  };
+}
 
 /** Codes are never reused: if BWG3 was deleted, the next is still BWG4. */
 export function nextBwgCode(rows = []) {
@@ -55,58 +111,79 @@ export async function loadBwgDirectory() {
   };
 }
 
+/**
+ * Creates the BWG and returns { code, row }.
+ *
+ * `row` is exactly what was written, so the directory can show the BWG
+ * before the Sheet CSV endpoint catches up with the append.
+ */
 export async function createBwg({ values, documents, user }) {
-  if (!isWriteConfigured()) {
-    throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
-    );
-  }
+  requireWrite();
 
   const existing = await readTab(BWGS.tab).catch(() => []);
   const code = nextBwgCode(existing);
+  const link = await uploadDocuments(documents, code, values.BWG_Name);
 
-  const fileId = await uploadFile(documents, {
-    folder: "Documents",
-    name: `${code}_${values.BWG_Name}_documents.pdf`.replace(/[\\/:*?"<>|]/g, "-"),
-  });
-
-  const now = new Date().toISOString();
-  const panAvailable = values.PAN_Not_Available !== "Yes";
-
-  await appendRow(BWGS.tab, {
+  const row = {
     BWG_Code: code,
-    BWG_Name: values.BWG_Name.trim(),
-    BWG_Type: values.BWG_Type,
-    BWG_Type_Other: values.BWG_Type === "Others" ? values.BWG_Type_Other.trim() : "",
-    Area: values.Area,
-    Operation_Type: values.Operation_Type,
-    Onboarding_Date: values.Onboarding_Date,
-    Address: values.Address.trim(),
-    Pin_Code: values.Pin_Code,
-    Ward_Zone: values.Ward_Zone.trim(),
-    Contact_Person: values.Contact_Person.trim(),
-    Phone: values.Phone,
-    Email: values.Email.trim(),
-    Collection_Frequency: values.Collection_Frequency,
-    GST_Registered: values.GST_Registered,
-    GST_Number: values.GST_Registered === "Yes" ? values.GST_Number.toUpperCase() : "",
-    PAN_Number: panAvailable ? values.PAN_Number.toUpperCase() : "",
-    PAN_Not_Available: values.PAN_Not_Available,
-    Agreement_Type: values.Agreement_Type,
-    Bank_Account_Name: values.Bank_Account_Name.trim(),
-    Bank_Name: values.Bank_Name.trim(),
-    Account_Number: values.Account_Number,
-    IFSC_Code: values.IFSC_Code.toUpperCase(),
-    Branch_Name: values.Branch_Name.trim(),
-    Bank_Address: values.Bank_Address.trim(),
-    Documents_File_Id: fileId,
+    ...fieldsFromForm(values),
+    Documents_File_Id: link,
     Status: "Active",
     Created_By: user?.id || "",
-    Created_On: now,
+    Created_On: new Date().toISOString(),
     Updated_By: "",
     Updated_On: "",
+  };
+
+  await appendRow(BWGS.tab, row);
+
+  return { code, row };
+}
+
+/**
+ * Updates an existing BWG and returns { code, row }.
+ *
+ * `documents` is only the replacement PDF: leaving it empty keeps whatever
+ * is already on record.
+ */
+export async function updateBwg({ code, values, documents, existing, user }) {
+  requireWrite();
+
+  const patch = {
+    ...fieldsFromForm(values),
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  };
+
+  if (documents) {
+    patch.Documents_File_Id = await uploadDocuments(documents, code, values.BWG_Name);
+  }
+
+  await updateRow(BWGS.tab, BWGS.idColumn, code, patch);
+
+  return { code, row: { ...existing, BWG_Code: code, ...patch } };
+}
+
+/**
+ * Removes the BWG from the sheet, after the Apps Script archives a full copy
+ * to Deleted_Items.
+ */
+export async function deleteBwg({ code, label, user }) {
+  requireWrite();
+
+  const result = await deleteRow(BWGS.tab, BWGS.idColumn, code, {
+    label: label || code,
+    user: user?.id || "",
   });
 
-  return code;
+  if (!result?.removed) {
+    throw new Error(
+      `${code} was not removed from the sheet. The Apps Script Web App is ` +
+        "running an older version that only marks a record Deleted. Paste in the " +
+        "current apps-script/Code.gs and deploy a new version."
+    );
+  }
+
+  return { code };
 }
+

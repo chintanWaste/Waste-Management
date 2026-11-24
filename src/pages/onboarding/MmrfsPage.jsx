@@ -1,75 +1,70 @@
-import { useState } from "react";
-import { ExternalLink, Plus } from "lucide-react";
+import { useCallback, useState } from "react";
+import { ExternalLink, Pencil, Plus } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
 import DataTable from "../../components/common/DataTable";
-import FileUpload from "../../components/common/FileUpload";
-import { SelectInput, TextArea, TextInput } from "../../components/common/Field";
 import Modal from "../../components/common/Modal";
 import PageHeader from "../../components/common/PageHeader";
-import { Banner } from "../../components/common/States";
-import { SETTING } from "../../config/appConfig";
-import { MMRFS } from "../../config/driveSchema";
+import RecordDetails from "../../components/common/RecordDetails";
+import { rowActionsColumn } from "../../components/common/rowActions";
+import { MMRFS, isWriteConfigured } from "../../config/driveSchema";
 import { useAuth } from "../../context/AuthContext";
-import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
-import { useForm } from "../../hooks/useForm";
 import { useSheetData } from "../../hooks/useSheetData";
 import { viewUrl } from "../../services/drive";
-import { createMmrf, nextCode } from "../../services/onboardingService";
+import { deleteRecord } from "../../services/onboardingService";
 import { num } from "../../utils/format";
-import * as r from "../../utils/fieldRules";
-
-const EMPTY = {
-  MMRF_Name: "", Location: "", Area: "", Operation_Type: "", Complete_Address: "",
-  In_Charge_Name: "", Contact_Number: "", Email: "",
-  Capacity_Kg_Per_Day: "", Number_Of_Workers: "", Supervised_By: "",
-};
+import MmrfForm from "./MmrfForm";
 
 /** Section 9 — MMRF / RRR Centre onboarding. All fields mandatory except email. */
 export default function MmrfsPage() {
   const { user } = useAuth();
-  const { list, number } = useSettings();
   const toast = useToast();
-  const { rows, loading, error, reload } = useSheetData(MMRFS.tab);
+  const canSave = isWriteConfigured();
+
+  const { rows, loading, error, reload, addRow, removeRow } = useSheetData(MMRFS.tab);
 
   const [open, setOpen] = useState(false);
-  const [documents, setDocuments] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [confirming, setConfirming] = useState(null);
+  const [removing, setRemoving] = useState("");
 
-  const form = useForm({
-    initialValues: EMPTY,
-    rules: {
-      MMRF_Name: r.orgName("MMRF / RRR Centre Name", { max: 120 }),
-      Location: r.placeName("Location"),
-      Area: r.choice("Area", list(SETTING.areas)),
-      Operation_Type: r.choice("Operation Type", list(SETTING.operationTypes)),
-      Complete_Address: r.address("Complete Address"),
-      In_Charge_Name: r.personName("MMRF In-charge"),
-      Contact_Number: r.phone("Contact Number"),
-      Email: r.email("Email Address", { required: false }),
-      Capacity_Kg_Per_Day: r.capacity("Capacity"),
-      Number_Of_Workers: r.wholeNumber("Number of Workers", { min: 1, max: 5000 }),
-      Supervised_By: r.personName("Supervised By"),
-      MoU: r.requiredFile("The MoU PDF", documents),
-    },
-    onSubmit: async (values, { reset }) => {
-      const code = await createMmrf({ values, documents, user });
-      reset();
-      setDocuments(null);
+  const handleCreated = useCallback(
+    ({ row }) => {
       setOpen(false);
-      toast.success(`${code} created`, `${values.MMRF_Name} is now in the directory.`);
+      addRow(row);
       reload();
     },
-  });
+    [addRow, reload]
+  );
 
-  const { field, errorFor, isValid, submitting, submitError } = form;
+  const handleUpdated = useCallback(() => {
+    setEditing(null);
+    reload();
+  }, [reload]);
 
-  const close = () => {
-    form.reset();
-    setDocuments(null);
-    setOpen(false);
-  };
+  const confirmDelete = useCallback(async () => {
+    const row = confirming;
+    if (!row) return;
+
+    setRemoving(row.MMRF_Code);
+    try {
+      await deleteRecord({ tab: MMRFS, id: row.MMRF_Code, label: row.MMRF_Name, user });
+      // Dropped here rather than by refetching: the CSV endpoint can still be
+      // serving the pre-delete copy, which would put the row straight back.
+      removeRow(MMRFS.idColumn, row.MMRF_Code);
+      setConfirming(null);
+      toast.success(`${row.MMRF_Code} deleted`, `${row.MMRF_Name} has been removed and archived.`);
+    } catch (err) {
+      toast.error("Could not delete the centre", err.message);
+    } finally {
+      setRemoving("");
+    }
+  }, [confirming, removeRow, toast, user]);
 
   const columns = [
     { key: "MMRF_Code", header: "Code", render: (r) => <span className="table__code">{r.MMRF_Code}</span> },
@@ -87,6 +82,8 @@ export default function MmrfsPage() {
     { key: "Status", header: "Status", render: (r) => <Badge>{r.Status || "Active"}</Badge> },
     {
       key: "MoU_File_Id", header: "MoU", sortable: false,
+      // The cell shows a short link; an export needs the address itself.
+      exportValue: (r) => viewUrl(r.MoU_File_Id),
       render: (r) =>
         r.MoU_File_Id ? (
           <a href={viewUrl(r.MoU_File_Id)} target="_blank" rel="noreferrer" className="u-row" style={{ gap: 4 }}>
@@ -94,6 +91,15 @@ export default function MmrfsPage() {
           </a>
         ) : "—",
     },
+    rowActionsColumn({
+      idKey: "MMRF_Code",
+      canWrite: canSave,
+      busyId: removing,
+      labelFor: (r) => r.MMRF_Code,
+      onView: setViewing,
+      onEdit: setEditing,
+      onDelete: setConfirming,
+    }),
   ];
 
   return (
@@ -113,59 +119,67 @@ export default function MmrfsPage() {
         open={open}
         title="Create MMRF / RRR Centre"
         subtitle="All fields are required except email"
-        onClose={close}
+        onClose={() => setOpen(false)}
+        busy={saving}
+        busyText="Creating centre — uploading the MoU and saving to the sheet…"
       >
-        <form onSubmit={form.handleSubmit} noValidate>
-          {submitError && (
-            <div style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
-          )}
-
-          <div className="formsection">
-            <div className="formsection__title">Centre Details</div>
-            <div className="formgrid">
-              <TextInput label="MMRF Code" value={nextCode(rows, "MMRF_Code", "MMRF")} disabled hint="Generated automatically" />
-              <TextInput label="MMRF / RRR Centre Name" required hint="Must be unique within its area" {...field("MMRF_Name")} />
-              <TextInput label="Location" required placeholder="Landmark or locality" {...field("Location")} />
-              <SelectInput label="Area" required options={list(SETTING.areas)} {...field("Area")} />
-              <SelectInput label="Operation Type" required options={list(SETTING.operationTypes)} {...field("Operation_Type")} />
-              <div className="formgrid--full">
-                <TextArea label="Complete Address" required rows={2} {...field("Complete_Address")} />
-              </div>
-            </div>
-          </div>
-
-          <div className="formsection">
-            <div className="formsection__title">People and Capacity</div>
-            <div className="formgrid">
-              <TextInput label="MMRF In-charge" required {...field("In_Charge_Name")} />
-              <TextInput label="Contact Number" required inputMode="tel" {...field("Contact_Number")} />
-              <TextInput label="Email Address" type="email" hint="Optional" {...field("Email")} />
-              <TextInput label="Capacity (kg/Day)" required inputMode="numeric" {...field("Capacity_Kg_Per_Day")} />
-              <TextInput label="Number of Workers" required inputMode="numeric" {...field("Number_Of_Workers")} />
-              <TextInput label="Supervised By" required {...field("Supervised_By")} />
-            </div>
-          </div>
-
-          <div className="formsection">
-            <div className="formsection__title">Documents</div>
-            <FileUpload
-              label="MoU with the MMRF In-charge" required
-              maxMb={number(SETTING.maxUploadMb, 5)}
-              helpText="Upload the signed MoU with the MMRF in-charge as one PDF."
-              value={documents} error={errorFor("MoU")} onChange={setDocuments}
-            />
-          </div>
-
-          <div className="formactions">
-            <Button type="button" variant="secondary" onClick={close} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!isValid || submitting}>
-              {submitting ? "Creating…" : "Create centre"}
-            </Button>
-          </div>
-        </form>
+        <MmrfForm
+          rows={rows}
+          onSaved={handleCreated}
+          onCancel={() => setOpen(false)}
+          onBusyChange={setSaving}
+        />
       </Modal>
+
+      <Modal
+        open={Boolean(editing)}
+        title={`Edit ${editing?.MMRF_Code || ""}`}
+        subtitle="The MoU is only replaced if you choose a new one"
+        onClose={() => setEditing(null)}
+        busy={saving}
+        busyText="Saving changes to the sheet…"
+      >
+        {/* Keyed so switching rows rebuilds the form with the new values. */}
+        <MmrfForm
+          key={editing?.MMRF_Code}
+          mmrf={editing}
+          rows={rows}
+          onSaved={handleUpdated}
+          onCancel={() => setEditing(null)}
+          onBusyChange={setSaving}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(viewing)}
+        title={viewing?.MMRF_Code || ""}
+        subtitle={viewing?.MMRF_Name}
+        onClose={() => setViewing(null)}
+      >
+        <RecordDetails tab={MMRFS.tab} row={viewing} hide={["MMRF_Code", "MMRF_Name"]} />
+        <div className="formactions">
+          <Button variant="secondary" onClick={() => setViewing(null)}>Close</Button>
+          {viewing && canSave && (
+            <Button onClick={() => { setEditing(viewing); setViewing(null); }}>
+              <Pencil size={14} aria-hidden="true" />
+              Edit
+            </Button>
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={Boolean(confirming)}
+        title="Delete this centre?"
+        subtitle={confirming ? `${confirming.MMRF_Code} — ${confirming.MMRF_Name}` : ""}
+        message={confirming ? `${confirming.MMRF_Name} will be removed from the MMRFs tab of the sheet.` : ""}
+        note="A full copy is archived to Deleted_Items before the row is removed, so it can still be restored."
+        confirmLabel="Delete centre"
+        busy={Boolean(removing)}
+        busyText="Deleting and archiving…"
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirming(null)}
+      />
 
       <Card title="MMRF Directory" flush>
         <DataTable

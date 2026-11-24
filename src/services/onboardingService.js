@@ -80,30 +80,9 @@ export async function uploadDocument({ file, folder = "Documents", name }) {
 
 /* --------------------------------------------------------------- MMRF (9) */
 
-export async function createMmrf({ values, documents, user }) {
-  requireWrite();
-  const existing = await readTab(MMRFS.tab).catch(() => []);
-
-  // Name must be unique within an area (section 9).
-  const clash = existing.find(
-    (r) =>
-      String(r.MMRF_Name || "").trim().toLowerCase() ===
-        values.MMRF_Name.trim().toLowerCase() &&
-      r.Area === values.Area &&
-      String(r.Status || "").toLowerCase() !== "deleted"
-  );
-  if (clash) {
-    throw new Error(`${clash.MMRF_Code} already uses this name in ${values.Area}.`);
-  }
-
-  const code = nextCode(existing, "MMRF_Code", "MMRF");
-  const fileId = await uploadFile(documents, {
-    folder: "Documents",
-    name: safeName(`${code}_${values.MMRF_Name}_MoU.pdf`),
-  });
-
-  await appendRow(MMRFS.tab, {
-    MMRF_Code: code,
+/** The MMRF columns that come from the form, shared by create and edit. */
+function mmrfFields(values) {
+  return {
     MMRF_Name: values.MMRF_Name.trim(),
     Location: values.Location.trim(),
     Area: values.Area,
@@ -115,15 +94,80 @@ export async function createMmrf({ values, documents, user }) {
     Capacity_Kg_Per_Day: values.Capacity_Kg_Per_Day,
     Number_Of_Workers: values.Number_Of_Workers,
     Supervised_By: values.Supervised_By.trim(),
-    MoU_File_Id: fileId,
+  };
+}
+
+/** Refuses a name already used in the same area, ignoring one code when editing. */
+function assertMmrfNameFree(existing, values, exceptCode) {
+  const clash = existing.find(
+    (r) =>
+      String(r.MMRF_Name || "").trim().toLowerCase() ===
+        values.MMRF_Name.trim().toLowerCase() &&
+      r.Area === values.Area &&
+      String(r.MMRF_Code || "") !== String(exceptCode || "") &&
+      String(r.Status || "").toLowerCase() !== "deleted"
+  );
+  if (clash) {
+    throw new Error(`${clash.MMRF_Code} already uses this name in ${values.Area}.`);
+  }
+}
+
+export async function createMmrf({ values, documents, user }) {
+  requireWrite();
+  const existing = await readTab(MMRFS.tab).catch(() => []);
+
+  // Name must be unique within an area (section 9).
+  assertMmrfNameFree(existing, values);
+
+  const code = nextCode(existing, "MMRF_Code", "MMRF");
+  const link = await uploadDocument({
+    file: documents,
+    name: `${code}_${values.MMRF_Name}_MoU.pdf`,
+  });
+
+  const row = {
+    MMRF_Code: code,
+    ...mmrfFields(values),
+    MoU_File_Id: link,
     Status: "Active",
     Created_By: user?.id || "",
     Created_On: new Date().toISOString(),
     Updated_By: "", Updated_On: "",
-  });
+  };
 
-  return code;
+  await appendRow(MMRFS.tab, row);
+
+  return { code, row };
 }
+
+/**
+ * Updates an MMRF and returns { code, row }.
+ * `documents` is only the replacement MoU; leaving it empty keeps the old one.
+ */
+export async function updateMmrf({ code, values, documents, existing, user }) {
+  requireWrite();
+
+  const all = await readTab(MMRFS.tab).catch(() => []);
+  assertMmrfNameFree(all, values, code);
+
+  const patch = {
+    ...mmrfFields(values),
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  };
+
+  if (documents) {
+    patch.MoU_File_Id = await uploadDocument({
+      file: documents,
+      name: `${code}_${values.MMRF_Name}_MoU.pdf`,
+    });
+  }
+
+  await updateRow(MMRFS.tab, MMRFS.idColumn, code, patch);
+
+  return { code, row: { ...existing, MMRF_Code: code, ...patch } };
+}
+
 
 /* ------------------------------------------------------------ vehicles (10) */
 

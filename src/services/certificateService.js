@@ -3,7 +3,7 @@
  */
 
 import {
-  DIVERSION_CERTIFICATES, VENDOR_CERTIFICATES, isWriteConfigured,
+  DIVERSION_CERTIFICATES, VENDOR_CERTIFICATES, isWriteConfigured, WRITE_NOT_CONFIGURED,
 } from "../config/driveSchema";
 import { appendRow, readTab, updateRow, uploadFile } from "./sheetsApi";
 import {
@@ -14,8 +14,7 @@ import { buildDiversionPdf } from "../utils/diversionPdf";
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

@@ -8,15 +8,14 @@
 
 import {
   BWG_CHARACTERISATION, ENTRY_CATEGORIES, INWARD_BWG, INWARD_MMRF,
-  INWARD_RRR, INWARD_SPECIAL, isWriteConfigured,
+  INWARD_RRR, INWARD_SPECIAL, isWriteConfigured, WRITE_NOT_CONFIGURED,
 } from "../config/driveSchema";
 import { appendRow, appendRows, deleteRow, readTab, uploadFile } from "./sheetsApi";
 
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

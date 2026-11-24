@@ -7,7 +7,7 @@
  */
 
 import {
-  DISPATCH, DISPATCH_LINES, isWriteConfigured,
+  DISPATCH, DISPATCH_LINES, isWriteConfigured, WRITE_NOT_CONFIGURED,
 } from "../config/driveSchema";
 import { appendRow, appendRows, readTab } from "./sheetsApi";
 import { availableOn, mmrfAvailableOn } from "../utils/stock";
@@ -17,8 +17,7 @@ const PREFIX = { MMRF: "D-MMRF", RRR: "D-RRR", BWG: "D-BWG", SPECIAL: "D-SC" };
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

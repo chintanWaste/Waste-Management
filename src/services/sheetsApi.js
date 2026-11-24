@@ -7,7 +7,8 @@
 
 import Papa from "papaparse";
 import {
-  DRIVE, isDriveConfigured, isWriteConfigured, sheetCsvUrl, writeUrlProblem,
+  DRIVE, WRITE_NOT_CONFIGURED, isDriveConfigured, isWriteConfigured, sheetCsvUrl,
+  writeUrlProblem,
 } from "../config/driveSchema";
 
 const cache = new Map(); // tabName -> { at, rows }
@@ -73,9 +74,7 @@ export async function readTabs(tabNames, options) {
 /** Post an action to the Apps Script Web App. */
 async function callApi(action, payload) {
   if (!isWriteConfigured()) {
-    throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set VITE_SHEET_API_URL."
-    );
+    throw new Error(WRITE_NOT_CONFIGURED);
   }
 
   // Checked before the request: posting to the wrong Google page fails as an

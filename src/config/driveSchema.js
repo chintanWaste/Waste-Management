@@ -49,6 +49,22 @@ export const isDriveConfigured = () => Boolean(DRIVE.sheetId);
 export const isWriteConfigured = () => Boolean(DRIVE.apiUrl);
 
 /**
+ * Why nothing can be saved, in terms of the copy the reader is looking at.
+ *
+ * The URL is compiled in at build time, so a published site cannot be fixed by
+ * editing .env — that only moves the dev server. The two cases need different
+ * instructions, and being told to edit a file that will not be read is worse
+ * than being told nothing.
+ */
+export const WRITE_NOT_CONFIGURED = env.DEV
+  ? "Saving is not connected yet. Set VITE_SHEET_API_URL in .env to the Apps " +
+    "Script Web App URL (it ends in /exec), then restart the dev server."
+  : "This published site was built without the Apps Script Web App URL, so " +
+    "nothing can be saved from it. Add the VITE_SHEET_API_URL and " +
+    "VITE_SHEET_API_KEY repository secrets on GitHub and re-run the Deploy " +
+    "workflow. Reading the Sheet is unaffected.";
+
+/**
  * A deployed Apps Script Web App. Two shapes are valid:
  *   https://script.google.com/macros/s/<deploymentId>/exec
  *   https://script.google.com/a/macros/<domain>/s/<deploymentId>/exec  (Workspace)

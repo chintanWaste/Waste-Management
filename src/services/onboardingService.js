@@ -6,7 +6,9 @@
  * pointing at a document that does not exist.
  */
 
-import { DRIVERS, MMRFS, VEHICLES, isWriteConfigured } from "../config/driveSchema";
+import {
+  DRIVERS, MMRFS, VEHICLES, isWriteConfigured, WRITE_NOT_CONFIGURED,
+} from "../config/driveSchema";
 import { viewUrl } from "./drive";
 import { appendRow, deleteRow, readTab, updateRow, uploadFile } from "./sheetsApi";
 
@@ -24,8 +26,7 @@ export function nextCode(rows, column, prefix) {
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

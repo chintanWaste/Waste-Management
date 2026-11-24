@@ -9,7 +9,7 @@
  */
 
 import {
-  DISPATCH_LINES, ENTRY_CATEGORIES, WASTE_CATEGORIES, isWriteConfigured,
+  DISPATCH_LINES, ENTRY_CATEGORIES, WASTE_CATEGORIES, isWriteConfigured, WRITE_NOT_CONFIGURED,
 } from "../config/driveSchema";
 import { appendRow, deleteRow, readTab, updateRow } from "./sheetsApi";
 
@@ -24,8 +24,7 @@ export const STATUSES = ["Active", "Inactive"];
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

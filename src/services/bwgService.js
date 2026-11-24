@@ -6,15 +6,16 @@
  * rewrites history (section 11).
  */
 
-import { BWGS, LINKAGE, VENDORS, isWriteConfigured } from "../config/driveSchema";
+import {
+  BWGS, LINKAGE, VENDORS, isWriteConfigured, WRITE_NOT_CONFIGURED,
+} from "../config/driveSchema";
 import { viewUrl } from "./drive";
 import { appendRow, deleteRow, readTab, updateRow, uploadFile } from "./sheetsApi";
 
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

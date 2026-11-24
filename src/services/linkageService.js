@@ -7,7 +7,9 @@
  * changes past data or past vendor totals.
  */
 
-import { LINKAGE, isWriteConfigured } from "../config/driveSchema";
+import {
+  LINKAGE, isWriteConfigured, WRITE_NOT_CONFIGURED,
+} from "../config/driveSchema";
 import { appendRow, readTab, updateRow } from "./sheetsApi";
 import { parseDate } from "../utils/format";
 
@@ -78,8 +80,7 @@ function nextLinkageId(rows) {
 export async function assignVendor({ bwgCodes, vendorCode, fromDate, user }) {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
   if (!vendorCode) throw new Error("Choose a vendor.");

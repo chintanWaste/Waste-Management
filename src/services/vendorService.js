@@ -5,16 +5,14 @@
  * leaves a vendor row pointing at a document that does not exist.
  */
 
-import { VENDORS, isDriveConfigured, isWriteConfigured } from "../config/driveSchema";
+import {
+  VENDORS, isDriveConfigured, isWriteConfigured, WRITE_NOT_CONFIGURED,
+} from "../config/driveSchema";
 import { viewUrl } from "./drive";
 import { appendRow, deleteRow, readTab, updateRow, uploadFile } from "./sheetsApi";
 
-const NOT_CONNECTED =
-  "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-  "VITE_SHEET_API_URL in app/.env, then try again.";
-
 function requireWrite() {
-  if (!isWriteConfigured()) throw new Error(NOT_CONNECTED);
+  if (!isWriteConfigured()) throw new Error(WRITE_NOT_CONFIGURED);
 }
 
 /** Codes are never reused: if V3 was deleted, the next vendor is still V4. */

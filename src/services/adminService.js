@@ -5,7 +5,7 @@
 
 import {
   ALERTS, APPROVALS, BWG_CHARACTERISATION, DELETED_ITEMS, INWARD_RRR, INWARD_SPECIAL,
-  SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured, validationTargets,
+  SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured, validationTargets, WRITE_NOT_CONFIGURED,
 } from "../config/driveSchema";
 import { approvalWouldBreak } from "./approvalChecks";
 import { replaceCategoryLines } from "./inwardService";
@@ -15,8 +15,7 @@ import { daysBetween, today } from "../utils/format";
 function requireWrite() {
   if (!isWriteConfigured()) {
     throw new Error(
-      "Saving is not connected yet. Deploy the Apps Script Web App and set " +
-        "VITE_SHEET_API_URL in app/.env, then try again."
+      WRITE_NOT_CONFIGURED
     );
   }
 }

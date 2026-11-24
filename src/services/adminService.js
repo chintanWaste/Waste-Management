@@ -4,8 +4,9 @@
  */
 
 import {
-  APPROVALS, DELETED_ITEMS, SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured,
+  ALERTS, APPROVALS, DELETED_ITEMS, SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured,
 } from "../config/driveSchema";
+import { approvalWouldBreak } from "./approvalChecks";
 import { appendRow, readTab, updateRow } from "./sheetsApi";
 import { daysBetween, today } from "../utils/format";
 
@@ -209,6 +210,30 @@ export async function requestApproval({
   // Flags the entry as having a change pending. Its values are untouched.
   await updateRow(tab.tab, tab.idColumn, recordId, { Approval_Status: "Pending" });
 
+  // "An alert is raised for every pending edit" (section 3.3).
+  try {
+    await appendRow(ALERTS.tab, {
+      Alert_Id: `AL${Date.now().toString(36).toUpperCase()}`,
+      Alert_Type: "Pending approval",
+      Severity: "Info",
+      Title: `Edit awaiting approval: ${recordId}`,
+      Message:
+        `${Object.keys(after).join(", ")} changed on ${recordId}. ` +
+        "The original values stay in use until this is approved.",
+      Related_Record_Type: tab.tab,
+      Related_Record_Id: recordId,
+      Area: oldValues?.Area || "",
+      Source_Type: "",
+      Raised_On: new Date().toISOString(),
+      Status: "Open",
+      Closed_By: "",
+      Closed_On: "",
+    });
+  } catch {
+    // An alert is a notification, not the record itself. If the Alerts tab is
+    // missing, the edit must still reach the Super Admin through Approvals.
+  }
+
   return { approvalId: id, fields: Object.keys(after) };
 }
 
@@ -264,6 +289,29 @@ export async function decideApproval({ approval, decision, remark, user }) {
     } catch {
       throw new Error("The pending change could not be read — reject it and ask for a fresh edit.");
     }
+
+    /*
+     * Section 3.3 — re-checked at the moment of approval, not when the edit
+     * was requested. Stock and certificates move in between, so a change that
+     * was harmless when submitted can break the books by the time it is
+     * decided.
+     */
+    const rows = await readTab(tab.tab, { force: true }).catch(() => []);
+    const record = rows.find(
+      (r) => String(r[tab.idColumn]) === String(approval.Record_Ref_Id)
+    );
+    if (!record) {
+      throw new Error(
+        `${approval.Record_Ref_Id} no longer exists, so this change cannot be applied. Reject it.`
+      );
+    }
+
+    const problem = await approvalWouldBreak({
+      recordType: approval.Record_Type,
+      record,
+      patch,
+    });
+    if (problem) throw new Error(problem);
 
     await updateRow(tab.tab, tab.idColumn, approval.Record_Ref_Id, {
       ...patch,

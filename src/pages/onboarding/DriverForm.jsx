@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../../components/common/Button";
 import FileUpload from "../../components/common/FileUpload";
 import { TextInput } from "../../components/common/Field";
@@ -8,50 +8,94 @@ import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import { useForm } from "../../hooks/useForm";
-import { createDriver, nextCode } from "../../services/onboardingService";
+import { viewUrl } from "../../services/drive";
+import { createDriver, nextCode, updateDriver } from "../../services/onboardingService";
 import * as r from "../../utils/fieldRules";
 
 const EMPTY = {
   Driver_Name: "", Licence_Number: "", Contact_Number: "", Licence_Validity_Date: "",
 };
 
-/** Section 10.2 — driver inventory entry. */
-export default function DriverForm({ existing, onCreated, onCancel }) {
+/** Fill the form from a driver row, for editing. */
+export function driverToForm(row = {}) {
+  const out = { ...EMPTY };
+  for (const key of Object.keys(EMPTY)) out[key] = String(row[key] ?? "");
+  return out;
+}
+
+/**
+ * Section 10.2 — driver inventory entry.
+ *
+ * Passing `driver` switches to editing that row.
+ */
+export default function DriverForm({ driver, existing, onCreated, onCancel, onBusyChange }) {
   const { user } = useAuth();
   const { number } = useSettings();
   const toast = useToast();
   const [documents, setDocuments] = useState(null);
 
+  const editing = Boolean(driver);
+  const editCode = driver?.Driver_Code || "";
+  const existingLicence = editing ? viewUrl(driver.Licence_File_Id) : "";
+
+  const initialValues = useMemo(
+    () => (editing ? driverToForm(driver) : EMPTY),
+    [editing, driver]
+  );
+
   const form = useForm({
-    initialValues: EMPTY,
+    initialValues,
     rules: {
       Driver_Name: r.personName("Driver Name"),
       Licence_Number: r.licenceNumber(),
       Contact_Number: r.phone("Contact Number"),
       Licence_Validity_Date: r.futureDate("Driving Licence Validity Date"),
-      Licence: r.requiredFile("The driving licence copy", documents),
+      // Already on file when editing: a new one replaces it, none keeps it.
+      Licence: editing ? () => "" : r.requiredFile("The driving licence copy", documents),
     },
     onSubmit: async (values, { reset }) => {
-      const code = await createDriver({ values, documents, user });
+      const { code, row } = editing
+        ? await updateDriver({ code: editCode, values, documents, existing: driver, user })
+        : await createDriver({ values, documents, user });
+
       reset();
       setDocuments(null);
-      toast.success(`Driver ${code} created`, `${values.Driver_Name} is now in the inventory.`);
-      onCreated?.(code);
+      toast.success(
+        editing ? `Driver ${code} updated` : `Driver ${code} created`,
+        `${values.Driver_Name} is ${editing ? "saved" : "now in the inventory"}.`
+      );
+      onCreated?.({ code, row });
     },
   });
 
   const { field, setValue, errorFor, isValid, submitting, submitError } = form;
 
+  useEffect(() => {
+    onBusyChange?.(submitting);
+  }, [submitting, onBusyChange]);
+
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!submitError) return;
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast.error(editing ? "Driver not updated" : "Driver not created", submitError);
+  }, [submitError, toast, editing]);
+
   return (
     <>
       <form onSubmit={form.handleSubmit} noValidate>
         {submitError && (
-          <div style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
+          <div ref={errorRef} style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
         )}
 
         <div className="formsection">
           <div className="formgrid">
-            <TextInput label="Driver Code" value={nextCode(existing, "Driver_Code", "DR")} disabled hint="Generated automatically" />
+            <TextInput
+              label="Driver Code"
+              value={editing ? editCode : nextCode(existing, "Driver_Code", "DR")}
+              disabled
+              hint={editing ? "The code never changes" : "Generated automatically"}
+            />
             <TextInput label="Driver Name" required {...field("Driver_Name")} />
             <TextInput
               label="Driving Licence Number" required
@@ -72,10 +116,19 @@ export default function DriverForm({ existing, onCreated, onCancel }) {
         <div className="formsection">
           <div className="formsection__title">Documents</div>
           <FileUpload
-            label="Driving Licence Copy" required
+            label="Driving Licence Copy"
+            required={!editing}
             maxMb={number(SETTING.maxUploadMb, 5)}
-            helpText="Upload a scan of the driving licence as one PDF."
-            value={documents} error={errorFor("Licence")} onChange={setDocuments}
+            helpText={
+              editing && existingLicence
+                ? "A licence copy is already on file. Choose one only to replace it."
+                : "Upload a scan of the driving licence as one PDF."
+            }
+            value={documents}
+            error={errorFor("Licence")}
+            onChange={setDocuments}
+            existingUrl={existingLicence}
+            existingLabel={`${editCode} licence copy`}
           />
         </div>
 
@@ -84,7 +137,9 @@ export default function DriverForm({ existing, onCreated, onCancel }) {
             Cancel
           </Button>
           <Button type="submit" disabled={!isValid || submitting}>
-            {submitting ? "Adding…" : "Add driver"}
+            {submitting
+              ? (editing ? "Saving…" : "Adding…")
+              : (editing ? "Save changes" : "Add driver")}
           </Button>
         </div>
       </form>

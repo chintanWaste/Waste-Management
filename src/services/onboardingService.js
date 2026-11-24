@@ -171,34 +171,10 @@ export async function updateMmrf({ code, values, documents, existing, user }) {
 
 /* ------------------------------------------------------------ vehicles (10) */
 
-export async function createVehicle({ values, documents, user }) {
-  requireWrite();
-  const existing = await readTab(VEHICLES.tab).catch(() => []);
-
-  const unique = [
-    ["Registration_Number", "registration number"],
-    ["Engine_Number", "engine number"],
-    ["Chassis_Number", "chassis number"],
-  ];
-  for (const [column, label] of unique) {
-    const value = String(values[column]).replace(/\s/g, "").toUpperCase();
-    const clash = existing.find(
-      (r) => String(r[column] || "").replace(/\s/g, "").toUpperCase() === value
-    );
-    if (clash) throw new Error(`${clash.Vehicle_Code} already has this ${label}.`);
-  }
-
-  const code = nextCode(existing, "Vehicle_Code", "VH");
-  const registration = values.Registration_Number.replace(/[\s-]/g, "").toUpperCase();
-
-  const fileId = await uploadFile(documents, {
-    folder: "Documents",
-    name: safeName(`${code}_${registration}_documents.pdf`),
-  });
-
-  await appendRow(VEHICLES.tab, {
-    Vehicle_Code: code,
-    Registration_Number: registration,
+/** The vehicle columns that come from the form, shared by create and edit. */
+function vehicleFields(values) {
+  return {
+    Registration_Number: values.Registration_Number.replace(/[s-]/g, "").toUpperCase(),
     Engine_Number: values.Engine_Number.trim().toUpperCase(),
     Chassis_Number: values.Chassis_Number.trim().toUpperCase(),
     Vehicle_Type: values.Vehicle_Type,
@@ -208,46 +184,167 @@ export async function createVehicle({ values, documents, user }) {
     PUC_Validity_Date: values.Vehicle_Type === "Electric" ? "" : values.PUC_Validity_Date,
     Fitness_Validity_Date: values.Fitness_Validity_Date,
     Registration_Validity_Date: values.Registration_Validity_Date,
-    Documents_File_Id: fileId,
+  };
+}
+
+/** Registration, engine and chassis are unique; one code may be excused when editing. */
+function assertVehicleUnique(existing, values, exceptCode) {
+  const unique = [
+    ["Registration_Number", "registration number"],
+    ["Engine_Number", "engine number"],
+    ["Chassis_Number", "chassis number"],
+  ];
+  for (const [column, label] of unique) {
+    const value = String(values[column]).replace(/s/g, "").toUpperCase();
+    const clash = existing.find(
+      (r) =>
+        String(r[column] || "").replace(/s/g, "").toUpperCase() === value &&
+        String(r.Vehicle_Code || "") !== String(exceptCode || "")
+    );
+    if (clash) throw new Error(`${clash.Vehicle_Code} already has this ${label}.`);
+  }
+}
+
+export async function createVehicle({ values, documents, user }) {
+  requireWrite();
+  const existing = await readTab(VEHICLES.tab).catch(() => []);
+  assertVehicleUnique(existing, values);
+
+  const code = nextCode(existing, "Vehicle_Code", "VH");
+  const fields = vehicleFields(values);
+  const link = await uploadDocument({
+    file: documents,
+    name: `${code}_${fields.Registration_Number}_documents.pdf`,
+  });
+
+  const row = {
+    Vehicle_Code: code,
+    ...fields,
+    Documents_File_Id: link,
     Status: "Active",
     Created_By: user?.id || "",
     Created_On: new Date().toISOString(),
     Updated_By: "", Updated_On: "",
-  });
+  };
 
-  return code;
+  await appendRow(VEHICLES.tab, row);
+
+  return { code, row };
 }
 
+/** Updates a vehicle. `documents` is only the replacement PDF. */
+export async function updateVehicle({ code, values, documents, existing, user }) {
+  requireWrite();
+
+  const all = await readTab(VEHICLES.tab).catch(() => []);
+  assertVehicleUnique(all, values, code);
+
+  const fields = vehicleFields(values);
+  const patch = {
+    ...fields,
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  };
+
+  if (documents) {
+    patch.Documents_File_Id = await uploadDocument({
+      file: documents,
+      name: `${code}_${fields.Registration_Number}_documents.pdf`,
+    });
+  }
+
+  await updateRow(VEHICLES.tab, VEHICLES.idColumn, code, patch);
+
+  return { code, row: { ...existing, Vehicle_Code: code, ...patch } };
+}
+
+
 /* ------------------------------------------------------------- drivers (10) */
+
+/** The driver columns that come from the form, shared by create and edit. */
+function driverFields(values) {
+  return {
+    Driver_Name: values.Driver_Name.trim(),
+    Licence_Number: values.Licence_Number.trim().toUpperCase(),
+    Contact_Number: values.Contact_Number,
+    Licence_Validity_Date: values.Licence_Validity_Date,
+  };
+}
+
+function assertLicenceFree(existing, values, exceptCode) {
+  const licence = values.Licence_Number.trim().toUpperCase();
+  const clash = existing.find(
+    (r) =>
+      String(r.Licence_Number || "").trim().toUpperCase() === licence &&
+      String(r.Driver_Code || "") !== String(exceptCode || "")
+  );
+  if (clash) throw new Error(`${clash.Driver_Code} already has this driving licence number.`);
+}
 
 export async function createDriver({ values, documents, user }) {
   requireWrite();
   const existing = await readTab(DRIVERS.tab).catch(() => []);
-
-  const licence = values.Licence_Number.trim().toUpperCase();
-  const clash = existing.find(
-    (r) => String(r.Licence_Number || "").trim().toUpperCase() === licence
-  );
-  if (clash) throw new Error(`${clash.Driver_Code} already has this driving licence number.`);
+  assertLicenceFree(existing, values);
 
   const code = nextCode(existing, "Driver_Code", "DR");
-  const fileId = await uploadFile(documents, {
-    folder: "Documents",
-    name: safeName(`${code}_${values.Driver_Name}_licence.pdf`),
+  const link = await uploadDocument({
+    file: documents,
+    name: `${code}_${values.Driver_Name}_licence.pdf`,
   });
 
-  await appendRow(DRIVERS.tab, {
+  const row = {
     Driver_Code: code,
-    Driver_Name: values.Driver_Name.trim(),
-    Licence_Number: licence,
-    Contact_Number: values.Contact_Number,
-    Licence_Validity_Date: values.Licence_Validity_Date,
-    Licence_File_Id: fileId,
+    ...driverFields(values),
+    Licence_File_Id: link,
     Status: "Active",
     Created_By: user?.id || "",
     Created_On: new Date().toISOString(),
     Updated_By: "", Updated_On: "",
-  });
+  };
 
-  return code;
+  await appendRow(DRIVERS.tab, row);
+
+  return { code, row };
 }
+
+/** Updates a driver. `documents` is only the replacement licence copy. */
+export async function updateDriver({ code, values, documents, existing, user }) {
+  requireWrite();
+
+  const all = await readTab(DRIVERS.tab).catch(() => []);
+  assertLicenceFree(all, values, code);
+
+  const patch = {
+    ...driverFields(values),
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  };
+
+  if (documents) {
+    patch.Licence_File_Id = await uploadDocument({
+      file: documents,
+      name: `${code}_${values.Driver_Name}_licence.pdf`,
+    });
+  }
+
+  await updateRow(DRIVERS.tab, DRIVERS.idColumn, code, patch);
+
+  return { code, row: { ...existing, Driver_Code: code, ...patch } };
+}
+
+/**
+ * Activate or deactivate any record (section 10.3).
+ *
+ * A deactivated vehicle or driver stays in the inventory and in past records,
+ * but is not offered for new entries.
+ */
+export async function setRecordStatus({ tab, id, status, user }) {
+  requireWrite();
+  await updateRow(tab.tab, tab.idColumn, id, {
+    Status: status,
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  });
+  return { id, status };
+}
+

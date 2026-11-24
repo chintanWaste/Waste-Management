@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useState,
+} from "react";
 import { ROLES } from "../config/appConfig";
 import * as authService from "../services/authService";
 
@@ -22,6 +24,25 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(() => {
     authService.logout();
     setUser(null);
+  }, []);
+
+  /**
+   * Pick up a change a Super Admin has made to this account.
+   *
+   * Role and assignments are copied into the session at sign-in, so without
+   * this a Supervisor whose sources were just assigned would keep seeing "you
+   * have no source types assigned" until they happened to sign out and in.
+   * Runs once on load; a deactivated or deleted account is signed out.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    if (!authService.currentSession()) return undefined;
+
+    authService.refreshSession().then((fresh) => {
+      if (!cancelled) setUser(fresh);
+    });
+
+    return () => { cancelled = true; };
   }, []);
 
   const value = useMemo(() => {

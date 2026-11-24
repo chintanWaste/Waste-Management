@@ -88,6 +88,32 @@ export async function createUser({ values, user }) {
   return { id, password };
 }
 
+/**
+ * Changes a user's details, role and what they may work on (section 17.1).
+ *
+ * Username and password are left alone: a username identifies the account in
+ * the audit log, and a password is only ever set by a reset, never read.
+ *
+ * Assigning source types is what makes a Supervisor's screens work at all —
+ * with none assigned, Inward, Stock and Dispatch have nothing to show.
+ */
+export async function updateUser({ userId, values, user }) {
+  requireWrite();
+
+  await updateRow(USERS.tab, USERS.idColumn, userId, {
+    Full_Name: values.Full_Name.trim(),
+    Role: values.Role,
+    Assigned_Source_Types: (values.Assigned_Source_Types || []).join("|"),
+    Assigned_Areas: (values.Assigned_Areas || []).join("|"),
+    Phone: values.Phone || "",
+    Email: values.Email || "",
+    Updated_By: user?.id || "",
+    Updated_On: new Date().toISOString(),
+  });
+
+  return { id: userId };
+}
+
 export async function setUserStatus({ userId, status }) {
   requireWrite();
   await updateRow(USERS.tab, USERS.idColumn, userId, { Status: status });

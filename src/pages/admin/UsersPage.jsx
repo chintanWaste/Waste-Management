@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyRound, Plus, Power, ShieldCheck } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, ShieldCheck } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -15,7 +15,9 @@ import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import { useForm } from "../../hooks/useForm";
 import { useSheetData } from "../../hooks/useSheetData";
-import { createUser, resetUserPassword, setUserStatus } from "../../services/adminService";
+import {
+  createUser, resetUserPassword, setUserStatus, updateUser,
+} from "../../services/adminService";
 import * as r from "../../utils/fieldRules";
 import { dateTime } from "../../utils/format";
 
@@ -52,6 +54,98 @@ function CheckGroup({ label, options, value, onChange, hint, required }) {
   );
 }
 
+/**
+ * Change a user's details and what they may work on.
+ *
+ * Username is not editable: it identifies the account in the audit log. The
+ * password is only ever replaced by a reset, never shown or edited here.
+ */
+function EditUserForm({ row, sourceOptions, areaOptions, onSaved, onCancel }) {
+  const { user } = useAuth();
+  const toast = useToast();
+
+  const split = (value) =>
+    String(value || "").split(/[|,]/).map((s) => s.trim()).filter(Boolean);
+
+  const form = useForm({
+    initialValues: {
+      Full_Name: row?.Full_Name || "",
+      Role: row?.Role || "",
+      Phone: row?.Phone || "",
+      Email: row?.Email || "",
+      Assigned_Source_Types: split(row?.Assigned_Source_Types),
+      Assigned_Areas: split(row?.Assigned_Areas),
+    },
+    rules: {
+      Full_Name: r.personName("Full Name"),
+      Role: r.choice("Role", Object.values(ROLES)),
+      Phone: r.phone("Phone Number", { required: false }),
+      Email: r.email("Email Address", { required: false }),
+      Assigned_Source_Types: (value, all) =>
+        all.Role === ROLES.SUPERVISOR && !value.length
+          ? "Assign at least one source type, or this Supervisor sees nothing"
+          : "",
+      Assigned_Areas: () => "",
+    },
+    onSubmit: async (values) => {
+      await updateUser({ userId: row.User_Id, values, user });
+      toast.success(`${values.Full_Name} updated`, "Their access takes effect at their next sign-in.");
+      onSaved?.();
+    },
+  });
+
+  const { field, values, setValue, isValid, submitting, submitError } = form;
+  const isSupervisor = values.Role === ROLES.SUPERVISOR;
+
+  return (
+    <form onSubmit={form.handleSubmit} noValidate>
+      {submitError && (
+        <div style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
+      )}
+
+      <div className="formgrid">
+        <TextInput label="User ID" value={row?.User_Id || ""} disabled />
+        <TextInput label="Username" value={row?.Username || ""} disabled hint="A username never changes" />
+        <TextInput label="Full Name" required {...field("Full_Name")} />
+        <SelectInput label="Role" required options={Object.values(ROLES)} {...field("Role")} />
+        <TextInput label="Phone" hint="Optional" {...field("Phone")} />
+        <TextInput label="Email" type="email" hint="Optional" {...field("Email")} />
+      </div>
+
+      {isSupervisor && (
+        <div className="formsection">
+          <div className="formsection__title">What This Supervisor May Work On</div>
+          <div className="formgrid">
+            <CheckGroup
+              label="Assigned Source Types" required
+              options={sourceOptions}
+              value={values.Assigned_Source_Types}
+              onChange={(next) => setValue("Assigned_Source_Types", next)}
+              hint="Inward entry, stock, dispatch, dashboard and reports are limited to these"
+            />
+            <CheckGroup
+              label="Assigned Areas"
+              options={areaOptions}
+              value={values.Assigned_Areas}
+              onChange={(next) => setValue("Assigned_Areas", next)}
+              hint="Leave all unticked for every area"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="formactions">
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={submitting}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={!isValid || submitting}>
+          {submitting ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 /** Section 17.1 — users. */
 export default function UsersPage() {
   const { user } = useAuth();
@@ -61,6 +155,7 @@ export default function UsersPage() {
 
   const [open, setOpen] = useState(false);
   const [credentials, setCredentials] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const sourceOptions = list(SETTING.sourceTypes).map((key) => ({
     value: key, label: SOURCE_TYPE_LABEL[key] || key,
@@ -170,6 +265,10 @@ export default function UsersPage() {
               key: "actions", header: "", sortable: false,
               render: (u) => (
                 <div className="u-row" style={{ gap: 4 }}>
+                  <button className="btn btn--ghost btn--sm" onClick={() => setEditing(u)}>
+                    <Pencil size={13} aria-hidden="true" />
+                    Edit
+                  </button>
                   <button className="btn btn--ghost btn--sm" onClick={() => toggleStatus(u)}>
                     <Power size={13} aria-hidden="true" />
                     {String(u.Status).toLowerCase() === "active" ? "Deactivate" : "Activate"}
@@ -239,6 +338,24 @@ export default function UsersPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(editing)}
+        title={`Edit ${editing?.Full_Name || "user"}`}
+        subtitle="A Supervisor sees nothing in Inward, Stock or Dispatch until source types are assigned"
+        size="md"
+        onClose={() => setEditing(null)}
+      >
+        {/* Keyed so switching rows rebuilds the form with that user's values. */}
+        <EditUserForm
+          key={editing?.User_Id}
+          row={editing}
+          sourceOptions={sourceOptions}
+          areaOptions={list(SETTING.areas)}
+          onSaved={() => { setEditing(null); reload(); }}
+          onCancel={() => setEditing(null)}
+        />
       </Modal>
 
       <Modal

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "../../components/common/Button";
 import FileUpload from "../../components/common/FileUpload";
 import { SelectInput, TextInput } from "../../components/common/Field";
@@ -8,7 +8,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
 import { useForm } from "../../hooks/useForm";
-import { createVehicle, nextCode } from "../../services/onboardingService";
+import { viewUrl } from "../../services/drive";
+import { createVehicle, nextCode, updateVehicle } from "../../services/onboardingService";
 import * as r from "../../utils/fieldRules";
 
 const EMPTY = {
@@ -18,15 +19,36 @@ const EMPTY = {
   Fitness_Validity_Date: "", Registration_Validity_Date: "",
 };
 
-/** Section 10.1 — vehicle inventory entry. */
-export default function VehicleForm({ existing, onCreated, onCancel }) {
+/** Fill the form from a vehicle row, for editing. */
+export function vehicleToForm(row = {}) {
+  const out = { ...EMPTY };
+  for (const key of Object.keys(EMPTY)) out[key] = String(row[key] ?? "");
+  return out;
+}
+
+/**
+ * Section 10.1 — vehicle inventory entry.
+ *
+ * Passing `vehicle` switches to editing that row: fields start filled, the
+ * code is fixed, and the PDF becomes optional because one is already on file.
+ */
+export default function VehicleForm({ vehicle, existing, onCreated, onCancel, onBusyChange }) {
   const { user } = useAuth();
   const { list, number } = useSettings();
   const toast = useToast();
   const [documents, setDocuments] = useState(null);
 
+  const editing = Boolean(vehicle);
+  const editCode = vehicle?.Vehicle_Code || "";
+  const existingDocuments = editing ? viewUrl(vehicle.Documents_File_Id) : "";
+
+  const initialValues = useMemo(
+    () => (editing ? vehicleToForm(vehicle) : EMPTY),
+    [editing, vehicle]
+  );
+
   const form = useForm({
-    initialValues: EMPTY,
+    initialValues,
     rules: {
       Registration_Number: r.vehicleNumber(),
       Engine_Number: r.machineNumber("Engine Number"),
@@ -41,31 +63,55 @@ export default function VehicleForm({ existing, onCreated, onCancel }) {
       ),
       Fitness_Validity_Date: r.futureDate("Fitness Validity Date"),
       Registration_Validity_Date: r.futureDate("Registration Validity Date"),
-      Documents: r.requiredFile("The documents PDF", documents),
+      // Already on file when editing: a new one replaces it, none keeps it.
+      Documents: editing ? () => "" : r.requiredFile("The documents PDF", documents),
     },
     onSubmit: async (values, { reset }) => {
-      const code = await createVehicle({ values, documents, user });
+      const { code, row } = editing
+        ? await updateVehicle({ code: editCode, values, documents, existing: vehicle, user })
+        : await createVehicle({ values, documents, user });
+
       reset();
       setDocuments(null);
-      toast.success(`Vehicle ${code} created`, `${values.Registration_Number} is now in the inventory.`);
-      onCreated?.(code);
+      toast.success(
+        editing ? `Vehicle ${code} updated` : `Vehicle ${code} created`,
+        `${values.Registration_Number} is ${editing ? "saved" : "now in the inventory"}.`
+      );
+      onCreated?.({ code, row });
     },
   });
 
   const { field, values, setValue, errorFor, isValid, submitting, submitError } = form;
   const isElectric = values.Vehicle_Type === "Electric";
 
+  useEffect(() => {
+    onBusyChange?.(submitting);
+  }, [submitting, onBusyChange]);
+
+  /** The button is at the foot of the form; the banner is at its head. */
+  const errorRef = useRef(null);
+  useEffect(() => {
+    if (!submitError) return;
+    errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    toast.error(editing ? "Vehicle not updated" : "Vehicle not created", submitError);
+  }, [submitError, toast, editing]);
+
   return (
     <>
       <form onSubmit={form.handleSubmit} noValidate>
         {submitError && (
-          <div style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
+          <div ref={errorRef} style={{ marginBottom: 16 }}><Banner tone="danger">{submitError}</Banner></div>
         )}
 
         <div className="formsection">
           <div className="formsection__title">Vehicle</div>
           <div className="formgrid">
-            <TextInput label="Vehicle Code" value={nextCode(existing, "Vehicle_Code", "VH")} disabled hint="Generated automatically" />
+            <TextInput
+              label="Vehicle Code"
+              value={editing ? editCode : nextCode(existing, "Vehicle_Code", "VH")}
+              disabled
+              hint={editing ? "The code never changes" : "Generated automatically"}
+            />
             <TextInput
               label="Registration Number" required maxLength={13} placeholder="DL01AB1234"
               style={{ textTransform: "uppercase" }}
@@ -102,10 +148,19 @@ export default function VehicleForm({ existing, onCreated, onCancel }) {
         <div className="formsection">
           <div className="formsection__title">Documents</div>
           <FileUpload
-            label="Documents" required
+            label="Documents"
+            required={!editing}
             maxMb={number(SETTING.maxUploadMb, 5)}
-            helpText="Upload one PDF (max 5 MB) containing: registration certificate (RC), insurance certificate, PUC certificate (not for electric vehicles), fitness certificate, and any other permit."
-            value={documents} error={errorFor("Documents")} onChange={setDocuments}
+            helpText={
+              editing && existingDocuments
+                ? "A PDF is already on file. Choose one only to replace it."
+                : "Upload one PDF (max 5 MB) containing: registration certificate (RC), insurance certificate, PUC certificate (not for electric vehicles), fitness certificate, and any other permit."
+            }
+            value={documents}
+            error={errorFor("Documents")}
+            onChange={setDocuments}
+            existingUrl={existingDocuments}
+            existingLabel={`${editCode} documents PDF`}
           />
         </div>
 
@@ -114,7 +169,9 @@ export default function VehicleForm({ existing, onCreated, onCancel }) {
             Cancel
           </Button>
           <Button type="submit" disabled={!isValid || submitting}>
-            {submitting ? "Adding…" : "Add vehicle"}
+            {submitting
+              ? (editing ? "Saving…" : "Adding…")
+              : (editing ? "Save changes" : "Add vehicle")}
           </Button>
         </div>
       </form>

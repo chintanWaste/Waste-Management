@@ -85,4 +85,35 @@ export function currentSession() {
   }
 }
 
+/**
+ * Re-read the signed-in user's row and return a fresh session.
+ *
+ * Role, assigned source types and assigned areas are copied into the session
+ * at sign-in, so a Super Admin changing them leaves the user looking at stale
+ * permissions — most visibly as a Supervisor still being told they have no
+ * sources assigned. Refreshing on load picks the change up without anyone
+ * having to know they must sign out and in again.
+ *
+ * Returns null when the account has gone or been deactivated, which signs
+ * them out. Any other failure returns the existing session unchanged, so a
+ * dropped connection does not throw people out.
+ */
+export async function refreshSession() {
+  const current = currentSession();
+  if (!current || !isDriveConfigured()) return current;
+
+  try {
+    const rows = await readTab(USERS.tab, { force: true });
+    const row = rows.find((r) => String(r.User_Id) === String(current.id));
+    if (!row) return null;
+    if (String(row.Status || "Active").toLowerCase() === "inactive") return null;
+
+    const session = { ...toSession(row), loggedInAt: current.loggedInAt };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return session;
+  } catch {
+    return current;
+  }
+}
+
 export const ROLE_LIST = Object.values(ROLES);

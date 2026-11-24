@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { Layers, Pencil } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -16,7 +16,9 @@ import { saveCategoryLines, saveSpecialInward } from "../../services/inwardServi
 import { date, kg } from "../../utils/format";
 import { usableDrivers, usableVehicles } from "../../utils/expiry";
 import * as v from "../../utils/validators";
+import { INWARD_SPECIAL } from "../../config/driveSchema";
 import CategorySheet from "./CategorySheet";
+import InwardEditDialog from "./InwardEditDialog";
 import { useCollectionDate } from "./useCollectionDate";
 
 const EMPTY = {
@@ -40,6 +42,7 @@ export default function SpecialCollectionTab() {
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [categorising, setCategorising] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const set = (key) => (e) => setValues((val) => ({ ...val, [key]: e.target.value }));
   const byVendor = values.Collected_By === "Vendor";
@@ -227,29 +230,54 @@ export default function SpecialCollectionTab() {
               { key: "Total_Waste_Collected_Kg", header: "Total", align: "right", render: (r) => kg(r.Total_Waste_Collected_Kg) },
               { key: "Categorisation", header: "Categories", render: (r) => <Badge>{r.Categorisation}</Badge> },
               {
-                key: "actions", header: "", sortable: false,
-                render: (r) =>
-                  r.Categorisation === "Pending" ? (
+                key: "actions", header: "Actions", sortable: false, align: "center",
+                exportValue: () => "",
+                render: (r) => (
+                  <div className="u-row" style={{ gap: 4, justifyContent: "center" }}>
+                    {r.Categorisation === "Pending" && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          setCategorising({
+                            entryId: r.Entry_Code,
+                            totalKg: Number(r.Total_Waste_Collected_Kg),
+                            label: `${r.Entry_Code} · ${r.Location}`,
+                            collectionDate: r.Collection_Date,
+                          })
+                        }
+                      >
+                        <Layers size={13} aria-hidden="true" />
+                        Categories
+                      </button>
+                    )}
                     <button
+                      type="button"
                       className="btn btn--ghost btn--sm"
-                      onClick={() =>
-                        setCategorising({
-                          entryId: r.Entry_Code,
-                          totalKg: Number(r.Total_Waste_Collected_Kg),
-                          label: `${r.Entry_Code} · ${r.Location}`,
-                          collectionDate: r.Collection_Date,
-                        })
-                      }
+                      onClick={() => setEditing(r)}
+                      title={`Edit ${r.Entry_Code}`}
                     >
-                      <Layers size={13} aria-hidden="true" />
-                      Categories
+                      <Pencil size={13} aria-hidden="true" />
+                      Edit
                     </button>
-                  ) : "—",
+                  </div>
+                ),
               },
             ]}
           />
         </Card>
       </div>
+
+      <InwardEditDialog
+        open={Boolean(editing)}
+        tab={INWARD_SPECIAL}
+        row={editing}
+        quantityField="Total_Waste_Collected_Kg"
+        label={editing ? `${editing.Entry_Code} · ${editing.Location}` : ""}
+        categorised
+        onSaved={() => { setEditing(null); reload(); }}
+        onClose={() => setEditing(null)}
+      />
     </>
   );
 }

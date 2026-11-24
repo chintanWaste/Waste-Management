@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { Layers, Pencil } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -8,6 +8,7 @@ import PhotoUpload from "../../components/common/PhotoUpload";
 import { SelectInput, TextInput } from "../../components/common/Field";
 import { Banner } from "../../components/common/States";
 import { SETTING } from "../../config/appConfig";
+import { INWARD_RRR } from "../../config/driveSchema";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
@@ -17,6 +18,7 @@ import { date, kg } from "../../utils/format";
 import { usableDrivers, usableVehicles } from "../../utils/expiry";
 import * as v from "../../utils/validators";
 import CategorySheet from "./CategorySheet";
+import InwardEditDialog from "./InwardEditDialog";
 import { useCollectionDate } from "./useCollectionDate";
 
 const EMPTY = { Vehicle_Code: "", Driver_Code: "", Area: "", Total_Waste_Collected_Kg: "" };
@@ -36,6 +38,7 @@ export default function RrrInwardTab() {
   const [photos, setPhotos] = useState([]);
   const [saving, setSaving] = useState(false);
   const [categorising, setCategorising] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const set = (key) => (e) => setValues((val) => ({ ...val, [key]: e.target.value }));
 
@@ -197,29 +200,54 @@ export default function RrrInwardTab() {
               { key: "Total_Waste_Collected_Kg", header: "Total", align: "right", render: (r) => kg(r.Total_Waste_Collected_Kg) },
               { key: "Categorisation", header: "Categories", render: (r) => <Badge>{r.Categorisation}</Badge> },
               {
-                key: "actions", header: "", sortable: false,
-                render: (r) =>
-                  r.Categorisation === "Pending" ? (
+                key: "actions", header: "Actions", sortable: false, align: "center",
+                exportValue: () => "",
+                render: (r) => (
+                  <div className="u-row" style={{ gap: 4, justifyContent: "center" }}>
+                    {r.Categorisation === "Pending" && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          setCategorising({
+                            entryId: r.Entry_Id,
+                            totalKg: Number(r.Total_Waste_Collected_Kg),
+                            label: `${r.Vehicle_Code} on ${date(r.Collection_Date)}`,
+                            collectionDate: r.Collection_Date,
+                          })
+                        }
+                      >
+                        <Layers size={13} aria-hidden="true" />
+                        Categories
+                      </button>
+                    )}
                     <button
+                      type="button"
                       className="btn btn--ghost btn--sm"
-                      onClick={() =>
-                        setCategorising({
-                          entryId: r.Entry_Id,
-                          totalKg: Number(r.Total_Waste_Collected_Kg),
-                          label: `${r.Vehicle_Code} on ${date(r.Collection_Date)}`,
-                          collectionDate: r.Collection_Date,
-                        })
-                      }
+                      onClick={() => setEditing(r)}
+                      title={`Edit ${r.Entry_Id}`}
                     >
-                      <Layers size={13} aria-hidden="true" />
-                      Categories
+                      <Pencil size={13} aria-hidden="true" />
+                      Edit
                     </button>
-                  ) : "—",
+                  </div>
+                ),
               },
             ]}
           />
         </Card>
       </div>
+
+      <InwardEditDialog
+        open={Boolean(editing)}
+        tab={INWARD_RRR}
+        row={editing}
+        quantityField="Total_Waste_Collected_Kg"
+        label={editing ? `${editing.Vehicle_Code} on ${date(editing.Collection_Date)}` : ""}
+        categorised
+        onSaved={() => { setEditing(null); reload(); }}
+        onClose={() => setEditing(null)}
+      />
     </>
   );
 }

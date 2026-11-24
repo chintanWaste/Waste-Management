@@ -10,7 +10,7 @@ import {
   BWG_CHARACTERISATION, ENTRY_CATEGORIES, INWARD_BWG, INWARD_MMRF,
   INWARD_RRR, INWARD_SPECIAL, isWriteConfigured,
 } from "../config/driveSchema";
-import { appendRow, appendRows, readTab, uploadFile } from "./sheetsApi";
+import { appendRow, appendRows, deleteRow, readTab, uploadFile } from "./sheetsApi";
 
 function requireWrite() {
   if (!isWriteConfigured()) {
@@ -252,6 +252,40 @@ export async function saveCategoryLines({ sourceType, entryRefId, collectionDate
 
   await appendRows(ENTRY_CATEGORIES.tab, rows);
   return rows.length;
+}
+
+/**
+ * Swap an entry's category break-up for a new one (sections 3.3 and 12.4).
+ *
+ * Editing a categorised total means its categories must be re-entered, so the
+ * old lines have to go. They are removed one at a time because a line carries
+ * no status column to retire it with, and each removal is archived like any
+ * other delete.
+ */
+export async function replaceCategoryLines({
+  sourceType, entryRefId, collectionDate, lines, user,
+}) {
+  requireWrite();
+
+  const existing = await readTab(ENTRY_CATEGORIES.tab).catch(() => []);
+  const mine = existing.filter(
+    (row) =>
+      String(row.Entry_Ref_Id) === String(entryRefId) &&
+      String(row.Source_Type) === String(sourceType)
+  );
+
+  for (const row of mine) {
+    await deleteRow(ENTRY_CATEGORIES.tab, ENTRY_CATEGORIES.idColumn, row.Line_Id, {
+      label: `${entryRefId} ${row.Waste_Category}`,
+      user: user?.id || "",
+    });
+  }
+
+  const written = await saveCategoryLines({
+    sourceType, entryRefId, collectionDate, lines, user,
+  });
+
+  return { removed: mine.length, written };
 }
 
 async function uploadPhotos(photos = [], prefix) {

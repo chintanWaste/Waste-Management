@@ -4,9 +4,11 @@
  */
 
 import {
-  ALERTS, APPROVALS, DELETED_ITEMS, SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured,
+  ALERTS, APPROVALS, BWG_CHARACTERISATION, DELETED_ITEMS, INWARD_RRR, INWARD_SPECIAL,
+  SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured,
 } from "../config/driveSchema";
 import { approvalWouldBreak } from "./approvalChecks";
+import { replaceCategoryLines } from "./inwardService";
 import { appendRow, readTab, updateRow } from "./sheetsApi";
 import { daysBetween, today } from "../utils/format";
 
@@ -136,6 +138,27 @@ export async function resetUserPassword({ userId }) {
 export const SUPERVISOR_EDIT_DAYS = 3;
 
 /**
+ * Where a pending edit keeps its proposed category break-up.
+ *
+ * Categories live in their own tab, not on the entry, so they cannot ride
+ * along as ordinary columns. Prefixed so it can never collide with a real
+ * column name, and stripped before the patch is written to the record.
+ */
+const CATEGORY_KEY = "__categories";
+
+/**
+ * Which source type an inward tab's category lines are filed under.
+ *
+ * Entry_Categories is one tab for every source, told apart by Source_Type,
+ * so replacing an entry's lines needs the source its tab represents.
+ */
+const SOURCE_FOR_TAB = {
+  [INWARD_RRR.tab]: "RRR",
+  [INWARD_SPECIAL.tab]: "SPECIAL",
+  [BWG_CHARACTERISATION.tab]: "BWG",
+};
+
+/**
  * Whether a Supervisor may still edit this entry (section 3.2).
  *
  * The window runs from when the entry was created, not from its collection
@@ -167,7 +190,7 @@ function changedFields(oldValues, newValues) {
  * decideApproval() is what writes the new values, if the Super Admin agrees.
  */
 export async function requestApproval({
-  tab, recordId, oldValues, newValues, changeType = "Edit", user,
+  tab, recordId, oldValues, newValues, changeType = "Edit", categories, user,
 }) {
   requireWrite();
 
@@ -175,6 +198,15 @@ export async function requestApproval({
   if (Object.keys(after).length === 0) {
     throw new Error("Nothing was changed, so there is nothing to send for approval.");
   }
+
+  /*
+   * A categorised total carries its new break-up with it (sections 3.3 and
+   * 12.4). It travels inside the approval rather than being written now,
+   * because the old categories must stay in use until the edit is approved,
+   * exactly as the old total does. CATEGORY_KEY is stripped before the rest
+   * is applied to the record, so it never becomes a column.
+   */
+  const payload = categories?.length ? { ...after, [CATEGORY_KEY]: categories } : after;
 
   const rows = await readTab(APPROVALS.tab).catch(() => []);
   const pending = rows.find(
@@ -198,7 +230,7 @@ export async function requestApproval({
     Record_Ref_Id: recordId,
     Change_Type: changeType,
     Old_Values_Json: JSON.stringify(before),
-    New_Values_Json: JSON.stringify(after),
+    New_Values_Json: JSON.stringify(payload),
     Requested_By: user?.id || "",
     Requested_On: new Date().toISOString(),
     Decision: "",
@@ -245,7 +277,7 @@ export async function requestApproval({
  * Returns what happened so the screen can say so.
  */
 export async function saveEntryEdit({
-  tab, recordId, record, newValues, isSuperAdmin, user,
+  tab, recordId, record, newValues, categories, isSuperAdmin, user,
 }) {
   requireWrite();
 
@@ -255,6 +287,18 @@ export async function saveEntryEdit({
       Updated_By: user?.id || "",
       Updated_On: new Date().toISOString(),
     });
+
+    // Nothing to approve, so the new break-up replaces the old one at once.
+    if (categories?.length) {
+      await replaceCategoryLines({
+        sourceType: SOURCE_FOR_TAB[tab.tab] || "",
+        entryRefId: recordId,
+        collectionDate: record?.Collection_Date,
+        lines: categories,
+        user,
+      });
+    }
+
     return { applied: true };
   }
 
@@ -266,7 +310,7 @@ export async function saveEntryEdit({
   }
 
   const { approvalId } = await requestApproval({
-    tab, recordId, oldValues: record, newValues, user,
+    tab, recordId, oldValues: record, newValues, categories, user,
   });
 
   return { applied: false, approvalId };
@@ -289,6 +333,10 @@ export async function decideApproval({ approval, decision, remark, user }) {
     } catch {
       throw new Error("The pending change could not be read — reject it and ask for a fresh edit.");
     }
+
+    // The category break-up travels with the edit but is not a column.
+    const categories = patch[CATEGORY_KEY];
+    delete patch[CATEGORY_KEY];
 
     /*
      * Section 3.3 — re-checked at the moment of approval, not when the edit
@@ -319,6 +367,21 @@ export async function decideApproval({ approval, decision, remark, user }) {
       Updated_By: user?.id || "",
       Updated_On: new Date().toISOString(),
     });
+
+    /*
+     * The break-up is swapped only now, with the total — the two have to move
+     * together or stock would be built from categories that no longer add up
+     * to their entry.
+     */
+    if (categories?.length) {
+      await replaceCategoryLines({
+        sourceType: SOURCE_FOR_TAB[approval.Record_Type] || "",
+        entryRefId: approval.Record_Ref_Id,
+        collectionDate: record.Collection_Date,
+        lines: categories,
+        user,
+      });
+    }
   } else {
     const tab = TAB_BY_NAME[approval.Record_Type];
     if (tab) {

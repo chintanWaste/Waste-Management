@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Layers } from "lucide-react";
+import { Layers, Pencil } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Card from "../../components/common/Card";
 import DataTable from "../../components/common/DataTable";
@@ -11,7 +11,9 @@ import { useToast } from "../../context/ToastContext";
 import { useSheets } from "../../hooks/useSheets";
 import { saveCategoryLines, saveCharacterisation } from "../../services/inwardService";
 import { date, kg, today } from "../../utils/format";
+import { BWG_CHARACTERISATION } from "../../config/driveSchema";
 import CategorySheet from "./CategorySheet";
+import InwardEditDialog from "./InwardEditDialog";
 
 /**
  * Section 12.6 — BWG characterisation, by vendor, per day.
@@ -31,6 +33,7 @@ export default function BwgCharacterisationTab() {
   const [collectionDate, setCollectionDate] = useState(today());
   const [vendorCode, setVendorCode] = useState("");
   const [characterising, setCharacterising] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const vendorName = useMemo(
     () => Object.fromEntries(data.vendors.map((v) => [v.Vendor_Code, v.Vendor_Name])),
@@ -205,29 +208,54 @@ export default function BwgCharacterisationTab() {
               { key: "Total_Collected_Kg", header: "Total", align: "right", render: (r) => kg(r.Total_Collected_Kg) },
               { key: "Characterisation", header: "Status", render: (r) => <Badge>{r.Characterisation}</Badge> },
               {
-                key: "actions", header: "", sortable: false,
-                render: (r) =>
-                  r.Characterisation === "Pending" ? (
+                key: "actions", header: "Actions", sortable: false, align: "center",
+                exportValue: () => "",
+                render: (r) => (
+                  <div className="u-row" style={{ gap: 4, justifyContent: "center" }}>
+                    {r.Characterisation === "Pending" && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          setCharacterising({
+                            id: r.Characterisation_Id,
+                            totalKg: Number(r.Total_Collected_Kg),
+                            vendorCode: r.Vendor_Code,
+                            collectionDate: r.Collection_Date,
+                          })
+                        }
+                      >
+                        <Layers size={13} aria-hidden="true" />
+                        Categories
+                      </button>
+                    )}
                     <button
+                      type="button"
                       className="btn btn--ghost btn--sm"
-                      onClick={() =>
-                        setCharacterising({
-                          id: r.Characterisation_Id,
-                          totalKg: Number(r.Total_Collected_Kg),
-                          vendorCode: r.Vendor_Code,
-                          collectionDate: r.Collection_Date,
-                        })
-                      }
+                      onClick={() => setEditing(r)}
+                      title={`Edit ${r.Characterisation_Id}`}
                     >
-                      <Layers size={13} aria-hidden="true" />
-                      Categories
+                      <Pencil size={13} aria-hidden="true" />
+                      Edit
                     </button>
-                  ) : "—",
+                  </div>
+                ),
               },
             ]}
           />
         </Card>
       </div>
+
+      <InwardEditDialog
+        open={Boolean(editing)}
+        tab={BWG_CHARACTERISATION}
+        row={editing}
+        quantityField="Total_Collected_Kg"
+        label={editing ? `${editing.Vendor_Code} on ${date(editing.Collection_Date)}` : ""}
+        categorised
+        onSaved={() => { setEditing(null); reload(); }}
+        onClose={() => setEditing(null)}
+      />
     </>
   );
 }

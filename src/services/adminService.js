@@ -131,6 +131,122 @@ export async function resetUserPassword({ userId }) {
 
 /* -------------------------------------------------------- 17.2 approvals */
 
+/** How many days after creation a Supervisor may still edit an entry (3.2). */
+export const SUPERVISOR_EDIT_DAYS = 3;
+
+/**
+ * Whether a Supervisor may still edit this entry (section 3.2).
+ *
+ * The window runs from when the entry was created, not from its collection
+ * date: the point is to let someone correct their own recent mistake, not to
+ * reopen old records.
+ */
+export function withinSupervisorEditWindow(row, days = SUPERVISOR_EDIT_DAYS) {
+  const since = daysBetween(row?.Created_On, today());
+  return since !== null && since <= days;
+}
+
+/** The columns that actually differ, so an approval shows only real changes. */
+function changedFields(oldValues, newValues) {
+  const out = { before: {}, after: {} };
+  for (const key of Object.keys(newValues)) {
+    if (String(oldValues?.[key] ?? "") === String(newValues[key] ?? "")) continue;
+    out.before[key] = oldValues?.[key] ?? "";
+    out.after[key] = newValues[key];
+  }
+  return out;
+}
+
+/**
+ * Section 3.3 — a Supervisor's edit is saved as a pending change, not applied.
+ *
+ * The record itself keeps its original values, so stock, the dashboard and
+ * reports carry on using the figures that were approved; only
+ * Approval_Status is set, to mark it as having an edit awaiting a decision.
+ * decideApproval() is what writes the new values, if the Super Admin agrees.
+ */
+export async function requestApproval({
+  tab, recordId, oldValues, newValues, changeType = "Edit", user,
+}) {
+  requireWrite();
+
+  const { before, after } = changedFields(oldValues, newValues);
+  if (Object.keys(after).length === 0) {
+    throw new Error("Nothing was changed, so there is nothing to send for approval.");
+  }
+
+  const rows = await readTab(APPROVALS.tab).catch(() => []);
+  const pending = rows.find(
+    (r) =>
+      String(r.Record_Ref_Id) === String(recordId) &&
+      String(r.Record_Type) === tab.tab &&
+      !String(r.Decision || "").trim()
+  );
+  if (pending) {
+    throw new Error(
+      `${recordId} already has an edit waiting for approval. ` +
+        "It must be approved or rejected before another change can be sent."
+    );
+  }
+
+  const id = `AP${Date.now().toString(36).toUpperCase()}`;
+
+  await appendRow(APPROVALS.tab, {
+    Approval_Id: id,
+    Record_Type: tab.tab,
+    Record_Ref_Id: recordId,
+    Change_Type: changeType,
+    Old_Values_Json: JSON.stringify(before),
+    New_Values_Json: JSON.stringify(after),
+    Requested_By: user?.id || "",
+    Requested_On: new Date().toISOString(),
+    Decision: "",
+    Decision_Remark: "",
+    Decided_By: "",
+    Decided_On: "",
+  });
+
+  // Flags the entry as having a change pending. Its values are untouched.
+  await updateRow(tab.tab, tab.idColumn, recordId, { Approval_Status: "Pending" });
+
+  return { approvalId: id, fields: Object.keys(after) };
+}
+
+/**
+ * Save an edit to an inward or dispatch entry, by whoever is making it.
+ *
+ * A Super Admin's edit is written straight away; a Supervisor's becomes a
+ * pending approval, and only inside the three-day window (section 3.2).
+ * Returns what happened so the screen can say so.
+ */
+export async function saveEntryEdit({
+  tab, recordId, record, newValues, isSuperAdmin, user,
+}) {
+  requireWrite();
+
+  if (isSuperAdmin) {
+    await updateRow(tab.tab, tab.idColumn, recordId, {
+      ...newValues,
+      Updated_By: user?.id || "",
+      Updated_On: new Date().toISOString(),
+    });
+    return { applied: true };
+  }
+
+  if (!withinSupervisorEditWindow(record)) {
+    throw new Error(
+      `${recordId} was created more than ${SUPERVISOR_EDIT_DAYS} days ago, so it can no ` +
+        "longer be edited. Ask a Super Admin to make the change."
+    );
+  }
+
+  const { approvalId } = await requestApproval({
+    tab, recordId, oldValues: record, newValues, user,
+  });
+
+  return { applied: false, approvalId };
+}
+
 /**
  * Section 3.3 — the original values stay in use until approval, so approving
  * is what writes the new values onto the record.

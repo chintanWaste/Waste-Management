@@ -16,10 +16,10 @@
  */
 
 /** Must match VITE_SHEET_API_KEY in the app's .env. Pick any long random string. */
-var API_KEY = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
+var API_KEY = 'MySecret_8xK92pL7vQ4nT6wR3zM5bY1a';
 
 /** The Drive folder holding Documents/ and Photos/ — same as VITE_DRIVE_FOLDER_ID. */
-var ROOT_FOLDER_ID = 'PASTE_THE_DRIVE_FOLDER_ID_HERE';
+var ROOT_FOLDER_ID = '1ZcXMzKkNxF1N7LAz5zY6f5COrSszMYAl';
 
 /** Rows deleted from any tab are archived here before the row is removed. */
 var DELETED_TAB = 'Deleted_Items';

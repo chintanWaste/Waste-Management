@@ -1,5 +1,5 @@
 import { ExternalLink, Pencil, Plug, Plus } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
@@ -37,17 +37,19 @@ export default function VendorsPage() {
   const [confirming, setConfirming] = useState(null); // the vendor awaiting a delete confirmation
   const [removing, setRemoving] = useState("");       // Vendor_Code currently deleting
 
-  const { rows, loading, error, reload, addRow } = useSheetData(VENDORS.tab, { enabled: connected });
+  const {
+    rows, loading, error, reload, addRow, removeRow,
+  } = useSheetData(VENDORS.tab, { enabled: connected });
 
   /**
-   * A deleted vendor is not part of the directory.
+   * The table shows every row the sheet holds, deleted ones included.
    *
-   * Deleting removes the row outright, so normally there is nothing to filter.
-   * This covers rows left behind by the earlier behaviour, which only set the
-   * status — and keeps the list correct if the deployed Apps Script is still
-   * that older version.
+   * Hiding rows flagged Deleted made a record that was still in the sheet
+   * vanish from the screen, which is worse than showing it: the Status column
+   * says what it is, and it can be deleted again once the Apps Script that
+   * actually removes rows is deployed.
    */
-  const liveRows = useMemo(() => rows.filter((r) => !isDeletedRow(r)), [rows]);
+  const liveRows = rows;
 
   /**
    * The new vendor goes into the table before the refetch, because the Sheet
@@ -68,8 +70,8 @@ export default function VendorsPage() {
   }, [reload]);
 
   /**
-   * Deleting is soft: the Apps Script sets Status to Deleted and archives a
-   * copy to Deleted_Items, so this can be undone from the admin screens.
+   * The Apps Script archives a full copy to Deleted_Items and then removes
+   * the row, so the vendor leaves the sheet but can still be restored.
    */
   const confirmDelete = useCallback(async () => {
     const row = confirming;
@@ -78,15 +80,26 @@ export default function VendorsPage() {
     setRemoving(row.Vendor_Code);
     try {
       await deleteVendor({ code: row.Vendor_Code, label: row.Vendor_Name, user });
-      toast.success(`Vendor ${row.Vendor_Code} deleted`, `${row.Vendor_Name} has been removed from the sheet and archived.`);
+
+      /*
+       * Taken off the table here rather than by refetching. The CSV endpoint
+       * can still be serving the pre-delete copy for a second or two, so a
+       * reload now would put the row straight back and look like a failure.
+       * sheetsApi has already dropped the cached tab, so the next visit
+       * fetches it fresh.
+       */
+      removeRow(VENDORS.idColumn, row.Vendor_Code);
       setConfirming(null);
-      reload();
+      toast.success(
+        `Vendor ${row.Vendor_Code} deleted`,
+        `${row.Vendor_Name} has been removed from the sheet and archived.`
+      );
     } catch (err) {
       toast.error("Could not delete the vendor", err.message);
     } finally {
       setRemoving("");
     }
-  }, [confirming, reload, toast, user]);
+  }, [confirming, removeRow, toast, user]);
 
   const columns = [
     { key: "Vendor_Code", header: "Code", render: (r) => <span className="table__code">{r.Vendor_Code}</span> },

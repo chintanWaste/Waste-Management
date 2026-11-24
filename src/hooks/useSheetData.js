@@ -43,5 +43,17 @@ export function useSheetData(tabName, { enabled = true } = {}) {
     setRows((prev) => [row, ...prev]);
   }, []);
 
-  return { rows, loading, error, reload: () => load(true), addRow };
+  /**
+   * Drop a just-deleted row straight away.
+   *
+   * Same reason as addRow: the Sheet's CSV endpoint can keep serving the
+   * pre-delete copy for a second or two, so without this a record the user
+   * has just deleted stays on screen and looks as though nothing happened.
+   */
+  const removeRow = useCallback((idColumn, id) => {
+    if (!idColumn || id === undefined || id === null) return;
+    setRows((prev) => prev.filter((r) => String(r[idColumn]) !== String(id)));
+  }, []);
+
+  return { rows, loading, error, reload: () => load(true), addRow, removeRow };
 }

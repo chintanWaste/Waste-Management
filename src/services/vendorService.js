@@ -157,10 +157,26 @@ export async function updateVendor({ code, values, documents, existing, user }) 
 export async function deleteVendor({ code, label, user }) {
   requireWrite();
 
-  await deleteRow(VENDORS.tab, VENDORS.idColumn, code, {
+  const result = await deleteRow(VENDORS.tab, VENDORS.idColumn, code, {
     label: label || code,
     user: user?.id || "",
   });
+
+  /*
+   * Only the current Apps Script removes the row and reports `removed`. An
+   * older deployment answers ok after merely setting Status to Deleted, so
+   * without this check the record looks deleted until the next refresh puts
+   * it back. Say what actually happened instead.
+   */
+  if (!result?.removed) {
+    throw new Error(
+      `${code} was not removed from the sheet. The Apps Script Web App is ` +
+        "running an older version that only marks a record Deleted. In the " +
+        "Apps Script editor, paste in the current apps-script/Code.gs, then run " +
+        "Deploy > Manage deployments > edit (pencil) > Version: New version. " +
+        "Opening the /exec URL should then report a version."
+    );
+  }
 
   return { code };
 }

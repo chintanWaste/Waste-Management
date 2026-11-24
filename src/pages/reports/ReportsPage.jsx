@@ -203,27 +203,33 @@ export default function ReportsPage() {
           />
         </Card>
       ) : (
-        filled.map((section) => (
+        filled.map((section) => {
+          // Worked out once per section rather than for every cell.
+          const columns = columnsOf(section.rows);
+
+          return (
           <div key={section.name} style={{ marginBottom: 16 }}>
             <Card title={section.name} subtitle={`${section.rows.length} rows`} flush>
               <div className="tablewrap">
                 <table className="table">
                   <thead>
                     <tr>
-                      {columnsOf(section.rows).map((c) => (
-                        <th key={c.key}>{c.header}</th>
+                      {columns.map((c) => (
+                        <th key={c.key} style={{ textAlign: c.align }}>{c.header}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {section.rows.slice(0, 100).map((row, i) => (
                       <tr key={i}>
-                        {columnsOf(section.rows).map((c) => (
+                        {columns.map((c) => (
                           <td
                             key={c.key}
-                            className={typeof row[c.key] === "number" ? "u-right u-mono" : ""}
+                            className={c.numeric ? "u-right u-mono" : ""}
                           >
-                            {typeof row[c.key] === "number" ? num(row[c.key], 2) : row[c.key] ?? "—"}
+                            {typeof row[c.key] === "number"
+                              ? num(row[c.key], c.decimals)
+                              : row[c.key] ?? "—"}
                           </td>
                         ))}
                       </tr>
@@ -238,7 +244,8 @@ export default function ReportsPage() {
               )}
             </Card>
           </div>
-        ))
+          );
+        })
       )}
     </>
   );

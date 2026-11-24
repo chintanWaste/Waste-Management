@@ -407,13 +407,41 @@ export function stockReport({ data, range, sourceType }) {
   return { title: `Stock report — ${sourceType}`, sections: [{ name: "Stock", rows }] };
 }
 
-/** Columns are taken from the first row, so a builder needs no column list. */
+/**
+ * Columns whose numbers are counts, not quantities.
+ *
+ * A count of 2 entries reads wrongly as "2.00", so these are shown whole
+ * while kilograms and percentages keep their two decimals.
+ */
+const COUNT_COLUMN =
+  /(^|_)(entries|count|rows|days|number|centres|vehicles|drivers|bwgs|records)(_|$)/i;
+
+/**
+ * Columns are taken from the rows, so a builder needs no column list.
+ *
+ * Each carries how it should be shown: a numeric column is right-aligned —
+ * header as well as cells, or the heading floats away from the figures under
+ * it — and counts are rounded to whole numbers.
+ */
 export function columnsOf(rows) {
   if (!rows?.length) return [];
-  return Object.keys(rows[0]).map((key) => ({
-    key,
-    header: key.replace(/_/g, " "),
-  }));
+
+  return Object.keys(rows[0]).map((key) => {
+    // The first row can hold a blank, so look for the first row that has a
+    // value before deciding whether the column is numeric.
+    const sample = rows.find(
+      (row) => row[key] !== undefined && row[key] !== null && row[key] !== ""
+    );
+    const numeric = typeof sample?.[key] === "number";
+
+    return {
+      key,
+      header: key.replace(/_/g, " "),
+      align: numeric ? "right" : "left",
+      numeric,
+      decimals: COUNT_COLUMN.test(key) ? 0 : 2,
+    };
+  });
 }
 
 export { certificatesWithRemaining };

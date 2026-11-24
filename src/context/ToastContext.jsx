@@ -26,6 +26,8 @@ export function ToastProvider({ children }) {
       toast: push,
       success: (title, text) => push(title, { text, tone: "success" }),
       error: (title, text) => push(title, { text, tone: "error", ms: 8000 }),
+      // Something did happen, but not all of it — kept on screen longer.
+      warning: (title, text) => push(title, { text, tone: "warn", ms: 9000 }),
     }),
     [push]
   );
@@ -35,9 +37,19 @@ export function ToastProvider({ children }) {
       {children}
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast ${t.tone === "error" ? "toast--error" : ""}`}>
-            {t.tone === "error"
-              ? <AlertTriangle size={17} aria-hidden="true" style={{ color: "var(--c-danger)", flex: "0 0 auto", marginTop: 1 }} />
+          <div key={t.id} className={`toast ${t.tone === "error" ? "toast--error" : ""} ${t.tone === "warn" ? "toast--warn" : ""}`}>
+            {t.tone === "error" || t.tone === "warn"
+              ? (
+                <AlertTriangle
+                  size={17}
+                  aria-hidden="true"
+                  style={{
+                    color: t.tone === "warn" ? "var(--c-warn)" : "var(--c-danger)",
+                    flex: "0 0 auto",
+                    marginTop: 1,
+                  }}
+                />
+              )
               : <CheckCircle2 size={17} aria-hidden="true" style={{ color: "var(--c-ok)", flex: "0 0 auto", marginTop: 1 }} />}
             <div className="u-grow">
               <div className="toast__title">{t.title}</div>

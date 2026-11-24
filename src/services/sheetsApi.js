@@ -141,6 +141,16 @@ export async function deleteRow(tabName, idColumn, id, context = {}) {
 }
 
 /**
+ * Put a list of values on one or more Sheet columns as a dropdown.
+ *
+ * `targets` is [{ tab, column }, ...]. Nothing is read or written in the
+ * rows themselves — only the data-validation rule on the column changes.
+ */
+export async function setValidation(targets, values) {
+  return callApi("validate", { targets, values });
+}
+
+/**
  * Upload a file to the Drive folder and get its file id back.
  * `file` is a File/Blob from an <input type="file">.
  */

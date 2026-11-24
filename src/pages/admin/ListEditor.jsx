@@ -4,6 +4,14 @@ import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 
+/** "Vendor types" -> "vendor type", but "BWG types" -> "BWG type". */
+const singular = (label) =>
+  String(label)
+    .replace(/s$/, "")
+    .split(" ")
+    .map((word) => (/[A-Z]/.test(word.slice(1)) ? word : word.toLowerCase()))
+    .join(" ");
+
 /**
  * Edits one dropdown list — the values behind Vendor Type, BWG Type, MoU Type
  * and the rest (section 17.4).
@@ -151,7 +159,7 @@ export default function ListEditor({ listKey, meta, values, source, onSave, savi
           <div className="chipadd">
             <input
               className="input"
-              placeholder={`Add another ${meta.label.toLowerCase().replace(/s$/, "")}…`}
+              placeholder={`Add another ${singular(meta.label)}…`}
               value={entry}
               onChange={(e) => setEntry(e.target.value)}
               onKeyDown={(e) => {
@@ -164,10 +172,30 @@ export default function ListEditor({ listKey, meta, values, source, onSave, savi
             </Button>
           </div>
 
+          {dirty && (
+            <div className="chipsave">
+              <div>
+                <b>Not saved yet.</b>{" "}
+                {source === "default"
+                  ? "Save to write this list into the Settings tab of your Google Sheet."
+                  : "The dropdowns keep the saved values until this is written to the Sheet."}
+              </div>
+              <div className="u-row">
+                <Button size="sm" variant="secondary" onClick={() => setDraft(null)} disabled={saving}>
+                  <RotateCcw size={13} aria-hidden="true" />
+                  Undo
+                </Button>
+                <Button size="sm" onClick={() => onSave(listKey, current)} disabled={saving || !current.length}>
+                  {saving ? "Saving…" : "Save list"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           <p className="field__hint" style={{ marginTop: 10 }}>
             Section {meta.spec} · {current.length} value{current.length === 1 ? "" : "s"} ·
-            {" "}Click a value to rename it, ‹ › to reorder, × to remove.
-            {source === "default" && " Saving writes this list into your Google Sheet for the first time."}
+            {" "}Click a value to rename it, ‹ › to reorder, × to remove. Add puts the
+            value on the list here; it reaches the Sheet and the dropdowns when you save.
           </p>
         </>
       )}

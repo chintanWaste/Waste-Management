@@ -356,6 +356,63 @@ export const TAB_BY_NAME = Object.fromEntries(ALL_TABS.map((t) => [t.tab, t]));
 
 export const isFileColumn = (col) => /_File_Ids?$/.test(col);
 
+/**
+ * Which column of which tab each master list fills in the Google Sheet.
+ *
+ * The application reads a dropdown's values from Settings, but someone typing
+ * straight into the Sheet sees Google's own data-validation dropdown on the
+ * column. The two are kept the same by writing the list back as a validation
+ * rule whenever it is saved (section 17.4), so a value added, renamed or
+ * removed in Master Lists shows up in the Sheet as well.
+ *
+ * A list missing from here feeds no column of its own — it is used only inside
+ * the application.
+ */
+export const LIST_VALIDATION_TARGETS = {
+  vendorTypes: [{ tab: "Vendors", column: "Vendor_Type" }],
+  mouTypes: [{ tab: "Vendors", column: "MoU_Type" }],
+  states: [{ tab: "Vendors", column: "State" }],
+
+  bwgTypes: [{ tab: "BWGs", column: "BWG_Type" }],
+  agreementTypes: [{ tab: "BWGs", column: "Agreement_Type" }],
+  collectionFrequencies: [{ tab: "BWGs", column: "Collection_Frequency" }],
+  operationTypes: [
+    { tab: "BWGs", column: "Operation_Type" },
+    { tab: "MMRFs", column: "Operation_Type" },
+  ],
+
+  vehicleTypes: [{ tab: "Vehicles", column: "Vehicle_Type" }],
+  roles: [{ tab: "Users", column: "Role" }],
+
+  dispatchPurposes: [{ tab: "Dispatch", column: "Purpose" }],
+  financials: [{ tab: "Dispatch", column: "Financials" }],
+  collectedByOptions: [{ tab: "Inward_Special", column: "Collected_By" }],
+
+  wasteStreams: [
+    { tab: "Waste_Categories", column: "Waste_Stream" },
+    { tab: "Entry_Categories", column: "Waste_Stream" },
+    { tab: "Dispatch_Lines", column: "Waste_Stream" },
+  ],
+
+  sourceTypes: [
+    { tab: "Dispatch", column: "Source_Type" },
+    { tab: "Entry_Categories", column: "Source_Type" },
+  ],
+
+  areas: [
+    { tab: "BWGs", column: "Area" },
+    { tab: "MMRFs", column: "Area" },
+    { tab: "Inward_MMRF", column: "Area" },
+    { tab: "Inward_RRR", column: "Area" },
+    { tab: "Inward_BWG", column: "Area" },
+    { tab: "Inward_Special", column: "Area" },
+    { tab: "Dispatch", column: "Area" },
+  ],
+};
+
+/** The tab/column pairs one master list fills, or [] for an app-only list. */
+export const validationTargets = (listKey) => LIST_VALIDATION_TARGETS[listKey] || [];
+
 /* ========================================================================== */
 /*  4. NAMED EXPORTS used across the application                              */
 /* ========================================================================== */

@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Info } from "lucide-react";
+import { Info, RefreshCw } from "lucide-react";
+import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import PageHeader from "../../components/common/PageHeader";
 import { Banner, ErrorState, SkeletonRows } from "../../components/common/States";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useToast } from "../../context/ToastContext";
-import { saveList } from "../../services/adminService";
+import { rebuildSheetDropdowns, saveList } from "../../services/adminService";
 import ListEditor from "./ListEditor";
 
 /**
@@ -41,19 +42,54 @@ export default function MasterListsPage() {
   const save = async (key, values) => {
     setSaving(key);
     try {
-      const count = await saveList({
+      const result = await saveList({
         key,
         values,
         description: catalogue[key]?.description,
         user,
       });
-      toast.success(
-        `${catalogue[key]?.label || key} saved`,
-        `${count} values written to the Settings tab.`
-      );
+
+      const label = catalogue[key]?.label || key;
+      const written = `${result.count} values written to the Settings tab.`;
+
+      if (result.dropdownError) {
+        // The list is saved; only the Sheet's own dropdown is behind.
+        toast.warning(
+          `${label} saved, Sheet dropdown not updated`,
+          `${written} The dropdown in the Sheet still shows the old values — ` +
+            `${result.dropdownError}`
+        );
+      } else if (result.columns) {
+        toast.success(
+          `${label} saved`,
+          `${written} The dropdown on ${result.columns} Sheet column${result.columns === 1 ? "" : "s"} now matches.`
+        );
+      } else {
+        toast.success(`${label} saved`, written);
+      }
+
       reload();
     } catch (err) {
       toast.error("Could not save the list", err.message);
+    } finally {
+      setSaving("");
+    }
+  };
+
+  /** Re-apply every list, including the fixed ones, to the Sheet's columns. */
+  const rebuild = async () => {
+    setSaving("__rebuild");
+    try {
+      const values = Object.fromEntries(
+        Object.keys(catalogue).map((key) => [key, list(key)])
+      );
+      const columns = await rebuildSheetDropdowns(values);
+      toast.success(
+        "Sheet dropdowns rebuilt",
+        `${columns} column${columns === 1 ? "" : "s"} in the Google Sheet now match the master lists.`
+      );
+    } catch (err) {
+      toast.error("Could not rebuild the Sheet dropdowns", err.message);
     } finally {
       setSaving("");
     }
@@ -81,7 +117,13 @@ export default function MasterListsPage() {
     <>
       <PageHeader
         title="Master Lists"
-        description="Every dropdown in the application reads its options from here. Add, rename, reorder or remove a value and it changes everywhere immediately."
+        description="Every dropdown in the application reads its options from here, and the matching column of the Google Sheet gets the same values as its own dropdown. Add, rename, reorder or remove a value and it changes everywhere immediately."
+        actions={
+          <Button variant="secondary" onClick={rebuild} disabled={Boolean(saving)}>
+            <RefreshCw size={14} aria-hidden="true" />
+            {saving === "__rebuild" ? "Rebuilding…" : "Rebuild Sheet dropdowns"}
+          </Button>
+        }
       />
 
       <div style={{ marginBottom: 16 }}>

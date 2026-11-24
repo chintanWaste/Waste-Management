@@ -4,6 +4,7 @@ import Badge from "../../components/common/Badge";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import DataTable from "../../components/common/DataTable";
+import PhotoThumbs, { photoLinks } from "../../components/common/PhotoThumbs";
 import PhotoUpload from "../../components/common/PhotoUpload";
 import { SelectInput, TextInput } from "../../components/common/Field";
 import { Banner } from "../../components/common/States";
@@ -228,6 +229,11 @@ export default function SpecialCollectionTab() {
               { key: "Collected_By", header: "Collected by" },
               { key: "Collector", header: "Who" },
               { key: "Total_Waste_Collected_Kg", header: "Total", align: "right", render: (r) => kg(r.Total_Waste_Collected_Kg) },
+              {
+                key: "Photo_File_Ids", header: "Photos", sortable: false,
+                exportValue: (r) => photoLinks(r.Photo_File_Ids),
+                render: (r) => <PhotoThumbs value={r.Photo_File_Ids} />,
+              },
               { key: "Categorisation", header: "Categories", render: (r) => <Badge>{r.Categorisation}</Badge> },
               {
                 key: "actions", header: "Actions", sortable: false, align: "center",
@@ -268,16 +274,19 @@ export default function SpecialCollectionTab() {
         </Card>
       </div>
 
-      <InwardEditDialog
-        open={Boolean(editing)}
-        tab={INWARD_SPECIAL}
-        row={editing}
-        quantityField="Total_Waste_Collected_Kg"
-        label={editing ? `${editing.Entry_Code} · ${editing.Location}` : ""}
-        categorised
-        onSaved={() => { setEditing(null); reload(); }}
-        onClose={() => setEditing(null)}
-      />
+      {editing && (
+        <InwardEditDialog
+          key={editing.Entry_Code}
+          open
+          tab={INWARD_SPECIAL}
+          row={editing}
+          quantityField="Total_Waste_Collected_Kg"
+          label={`${editing.Entry_Code} · ${editing.Location}`}
+          categorised
+          onSaved={() => { setEditing(null); reload(); }}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </>
   );
 }

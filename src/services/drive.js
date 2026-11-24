@@ -37,6 +37,19 @@ export const imageUrl = (value, width = 800) => {
   return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w${width}` : "";
 };
 
+/**
+ * The same image from Google's own content host.
+ *
+ * Drive serves the thumbnail above from a page that sometimes answers an
+ * <img> with its sign-in HTML instead of the picture; this host answers with
+ * the bytes. Both need the file to be viewable by anyone with the link, so
+ * this is a second attempt, not a way round the sharing.
+ */
+export const imageUrlAlt = (value, width = 800) => {
+  const id = toFileId(value);
+  return id ? `https://lh3.googleusercontent.com/d/${id}=w${width}` : "";
+};
+
 /** Forces a download rather than opening the Drive viewer. */
 export const downloadUrl = (value) => {
   const id = toFileId(value);

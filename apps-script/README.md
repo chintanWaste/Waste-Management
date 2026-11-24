@@ -19,6 +19,11 @@ Make a folder in Drive to hold the uploads (the script creates `Documents/` and
 https://drive.google.com/drive/folders/<THIS IS THE FOLDER ID>
 ```
 
+Every file the script uploads is set to **anyone with the link — viewer**, because
+the app has no Google sign-in and cannot show a photo or open a document that is
+private to the script's account. The folder itself stays private, so nothing is
+listed or searchable in Drive; only the ids written into the Sheet reach the app.
+
 ## 2. Add the script
 
 1. Open the `Chintan_Waste_Data` spreadsheet.

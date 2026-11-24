@@ -246,16 +246,19 @@ export default function BwgCharacterisationTab() {
         </Card>
       </div>
 
-      <InwardEditDialog
-        open={Boolean(editing)}
-        tab={BWG_CHARACTERISATION}
-        row={editing}
-        quantityField="Total_Collected_Kg"
-        label={editing ? `${editing.Vendor_Code} on ${date(editing.Collection_Date)}` : ""}
-        categorised
-        onSaved={() => { setEditing(null); reload(); }}
-        onClose={() => setEditing(null)}
-      />
+      {editing && (
+        <InwardEditDialog
+          key={editing.Characterisation_Id}
+          open
+          tab={BWG_CHARACTERISATION}
+          row={editing}
+          quantityField="Total_Collected_Kg"
+          label={`${editing.Vendor_Code} on ${date(editing.Collection_Date)}`}
+          categorised
+          onSaved={() => { setEditing(null); reload(); }}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </>
   );
 }

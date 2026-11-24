@@ -5,11 +5,11 @@
 
 import {
   ALERTS, APPROVALS, BWG_CHARACTERISATION, DELETED_ITEMS, INWARD_RRR, INWARD_SPECIAL,
-  SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured,
+  SETTINGS, TAB_BY_NAME, USERS, isWriteConfigured, validationTargets,
 } from "../config/driveSchema";
 import { approvalWouldBreak } from "./approvalChecks";
 import { replaceCategoryLines } from "./inwardService";
-import { appendRow, readTab, updateRow } from "./sheetsApi";
+import { appendRow, readTab, setValidation, updateRow } from "./sheetsApi";
 import { daysBetween, today } from "../utils/format";
 
 function requireWrite() {
@@ -465,13 +465,62 @@ export async function saveSetting({ key, value, description, user }) {
   });
 }
 
-/** Save a dropdown list back to the Sheet as one pipe-separated cell. */
+/**
+ * Save a dropdown list back to the Sheet as one pipe-separated cell, and put
+ * the same values on the Sheet's own columns as a data-validation dropdown.
+ *
+ * The validation is a second step on purpose: the list itself is saved even if
+ * the Apps Script deployment is older than the `validate` action, and the
+ * caller is told which of the two happened rather than seeing the whole save
+ * reported as failed.
+ */
 export async function saveList({ key, values, description, user }) {
   const clean = values.map((v) => String(v).trim()).filter(Boolean);
   if (!clean.length) throw new Error("A list must have at least one value.");
 
   await saveSetting({ key, value: clean.join("|"), description, user });
-  return clean.length;
+
+  const targets = validationTargets(key);
+  if (!targets.length) {
+    return { count: clean.length, columns: 0, dropdownError: "" };
+  }
+
+  try {
+    const out = await setValidation(targets, clean);
+    return { count: clean.length, columns: out.applied || 0, dropdownError: "" };
+  } catch (err) {
+    return { count: clean.length, columns: 0, dropdownError: err.message };
+  }
+}
+
+/**
+ * Re-apply every master list to the Sheet's columns.
+ *
+ * Used once after the Apps Script is updated, to put the dropdowns on columns
+ * that were created before this existed — including the fixed lists, which are
+ * never saved from the Settings page but still belong on the Sheet.
+ */
+export async function rebuildSheetDropdowns(listsByKey) {
+  requireWrite();
+
+  let columns = 0;
+  const failed = [];
+
+  for (const [key, values] of Object.entries(listsByKey)) {
+    const targets = validationTargets(key);
+    const clean = (values || []).map((v) => String(v).trim()).filter(Boolean);
+    if (!targets.length || !clean.length) continue;
+
+    try {
+      const out = await setValidation(targets, clean);
+      columns += out.applied || 0;
+    } catch (err) {
+      failed.push(`${key}: ${err.message}`);
+    }
+  }
+
+  if (failed.length) throw new Error(failed.join("; "));
+  return columns;
 }
 
 export async function saveSettings({ changes, user }) {

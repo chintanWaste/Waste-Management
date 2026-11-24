@@ -4,6 +4,7 @@ import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import DataTable from "../../components/common/DataTable";
 import FileUpload from "../../components/common/FileUpload";
+import PhotoThumbs, { photoLinks } from "../../components/common/PhotoThumbs";
 import { SelectInput } from "../../components/common/Field";
 import { Banner, EmptyState } from "../../components/common/States";
 import { SETTING } from "../../config/appConfig";
@@ -108,6 +109,8 @@ export default function BwgDailyTab() {
         byBatch.set(key, {
           id: key, Collection_Date: row.Collection_Date, Area: row.Area,
           Total_Kg: 0, BWGs: 0, Status: row.Status || "Active",
+          // One photo is taken for the whole batch, so every row carries it.
+          Photo_File_Id: row.Photo_File_Id || "",
         });
       }
       const entry = byBatch.get(key);
@@ -236,6 +239,11 @@ export default function BwgDailyTab() {
               { key: "Area", header: "Area" },
               { key: "BWGs", header: "BWGs", align: "right" },
               { key: "Total_Kg", header: "Total", align: "right", render: (r) => kg(r.Total_Kg) },
+              {
+                key: "Photo_File_Id", header: "Photos", sortable: false,
+                exportValue: (r) => photoLinks(r.Photo_File_Id),
+                render: (r) => <PhotoThumbs value={r.Photo_File_Id} />,
+              },
               { key: "Status", header: "Status", render: (r) => <Badge>{r.Status}</Badge> },
             ]}
           />

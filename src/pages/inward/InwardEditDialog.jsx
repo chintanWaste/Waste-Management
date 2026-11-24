@@ -38,7 +38,13 @@ export default function InwardEditDialog({
   const toast = useToast();
 
   const originalTotal = Number(row?.[quantityField] ?? 0);
-  const [total, setTotal] = useState(String(originalTotal));
+  // Each caller mounts this per row (`key` on the row's id) and only while a
+  // row is being edited, so the field can be seeded once from that row. It
+  // used to be mounted permanently behind the table, where this ran with no
+  // row and left 0 in the box however many entries were opened afterwards.
+  const [total, setTotal] = useState(() =>
+    row?.[quantityField] == null ? "" : String(originalTotal)
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 

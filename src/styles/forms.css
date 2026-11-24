@@ -158,6 +158,7 @@
   animation: toastIn 0.2s ease;
 }
 .toast--error { border-left-color: var(--c-danger); }
+.toast--warn { border-left-color: var(--c-warn); }
 .toast__title { font-size: 13.5px; font-weight: 650; color: var(--c-ink); }
 .toast__text { font-size: 12.5px; color: var(--c-muted); margin-top: 2px; }
 .toast__close {
@@ -246,4 +247,34 @@
   border-color: #efd9ae;
   color: var(--c-warn);
   cursor: not-allowed;
+}
+
+/* ---------- Saved photo thumbnails ---------- */
+
+.thumbs { display: flex; align-items: center; gap: 4px; }
+
+.thumb {
+  display: grid; place-items: center;
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--c-surface-2);
+  color: var(--c-brand-700);
+  flex: none;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb:hover { border-color: var(--c-brand-500); }
+.thumb--fallback { border-style: dashed; }
+
+/* ---------- Unsaved list changes (Master Lists) ---------- */
+
+.chipsave {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 10px;
+  margin-top: 12px; padding: 10px 12px;
+  border: 1px solid var(--c-warn);
+  border-radius: var(--r-sm);
+  background: var(--c-warn-bg);
+  color: var(--c-ink);
+  font-size: 12.5px;
 }

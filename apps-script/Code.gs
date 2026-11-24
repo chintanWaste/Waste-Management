@@ -5,7 +5,7 @@
  * browser cannot write to a Sheet or to Drive on its own. Every write goes
  * through this Web App instead.
  *
- * Actions: append, appendMany, update, delete, upload.
+ * Actions: append, appendMany, update, delete, upload, validate.
  *
  * SET-UP — see apps-script/README.md. In short:
  *   1. Extensions > Apps Script from the Chintan_Waste_Data spreadsheet.
@@ -21,8 +21,16 @@ var API_KEY = 'CHANGE_ME_TO_A_LONG_RANDOM_STRING';
 /** The Drive folder holding Documents/ and Photos/ — same as VITE_DRIVE_FOLDER_ID. */
 var ROOT_FOLDER_ID = 'PASTE_THE_DRIVE_FOLDER_ID_HERE';
 
-/** Rows soft-deleted from any tab are copied here. */
+/** Rows deleted from any tab are archived here before the row is removed. */
 var DELETED_TAB = 'Deleted_Items';
+
+/**
+ * Bumped whenever this file changes, so which version is actually deployed
+ * can be checked by opening the /exec URL in a browser. Editing the code is
+ * not enough: a deployment keeps serving a frozen snapshot until
+ * Deploy > Manage deployments > edit > New version is run.
+ */
+var VERSION = '4 — master lists drive the Sheet dropdowns';
 
 function doPost(e) {
   try {
@@ -32,13 +40,34 @@ function doPost(e) {
       return respond({ ok: false, error: 'Rejected: the API key does not match.' });
     }
 
-    switch (body.action) {
-      case 'append':     return respond(appendRow(body.tab, body.row));
-      case 'appendMany': return respond(appendMany(body.tab, body.rows));
-      case 'update':     return respond(updateRow(body.tab, body.idColumn, body.id, body.row));
-      case 'delete':     return respond(deleteRow(body.tab, body.idColumn, body.id, body.context));
-      case 'upload':     return respond(uploadFile(body.folder, body.name, body.mimeType, body.data));
-      default:           return respond({ ok: false, error: 'Unknown action: ' + body.action });
+    /*
+     * One writer at a time.
+     *
+     * Every write finds its row by number first and then acts on it. Two
+     * requests overlapping could interleave between those steps, and a delete
+     * shifts every row below it up by one — so without this, a concurrent
+     * write could land on, or remove, the wrong record.
+     */
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(25000)) {
+      return respond({
+        ok: false,
+        error: 'The sheet is busy with another change. Please try again.'
+      });
+    }
+
+    try {
+      switch (body.action) {
+        case 'append':     return respond(appendRow(body.tab, body.row));
+        case 'appendMany': return respond(appendMany(body.tab, body.rows));
+        case 'update':     return respond(updateRow(body.tab, body.idColumn, body.id, body.row));
+        case 'delete':     return respond(deleteRow(body.tab, body.idColumn, body.id, body.context));
+        case 'upload':     return respond(uploadFile(body.folder, body.name, body.mimeType, body.data));
+        case 'validate':   return respond(setValidation(body.targets, body.values));
+        default:           return respond({ ok: false, error: 'Unknown action: ' + body.action });
+      }
+    } finally {
+      lock.releaseLock();
     }
   } catch (err) {
     return respond({ ok: false, error: String(err && err.message ? err.message : err) });
@@ -47,7 +76,7 @@ function doPost(e) {
 
 /** A GET is only ever a health check — it confirms the deployment is reachable. */
 function doGet() {
-  return respond({ ok: true, service: 'Chintan Waste write API' });
+  return respond({ ok: true, service: 'Chintan Waste write API', version: VERSION });
 }
 
 function respond(payload) {
@@ -144,8 +173,11 @@ function updateRow(tabName, idColumn, id, patch) {
 }
 
 /**
- * Soft delete: the row stays where it is with Status = Deleted, and a copy is
- * written to Deleted_Items so nothing is ever actually lost.
+ * Removes the row from its tab, after writing a full copy to Deleted_Items.
+ *
+ * The row really does leave the sheet, so the tab only ever holds live
+ * records. Nothing is lost: Record_Json in Deleted_Items holds every column
+ * exactly as it was, which is what the Deleted Items screen restores from.
  */
 function deleteRow(tabName, idColumn, id, context) {
   var sheet = sheetFor(tabName);
@@ -155,30 +187,112 @@ function deleteRow(tabName, idColumn, id, context) {
 
   var values = sheet.getRange(rowNumber, 1, 1, headers.length).getValues()[0];
 
-  var archive = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(DELETED_TAB);
-  if (archive) {
-    var snapshot = {};
-    headers.forEach(function (header, i) { snapshot[header] = values[i]; });
+  var snapshot = {};
+  headers.forEach(function (header, i) { snapshot[header] = values[i]; });
 
-    archive.appendRow(toRowArray(headersOf(archive), {
-      Deletion_Id: Utilities.getUuid(),
-      Record_Type: tabName,
-      Record_Ref_Id: id,
-      Record_Label: (context && context.label) || '',
-      Record_Json: JSON.stringify(snapshot),
-      Cascade_Json: (context && context.cascade) ? JSON.stringify(context.cascade) : '',
-      Deleted_By: (context && context.user) || '',
-      Deleted_On: new Date().toISOString()
-    }));
-  }
+  var archive = archiveSheet();
+  archive.appendRow(toRowArray(headersOf(archive), {
+    Deletion_Id: Utilities.getUuid(),
+    Record_Type: tabName,
+    Record_Ref_Id: id,
+    Record_Label: (context && context.label) || '',
+    Record_Json: JSON.stringify(snapshot),
+    Cascade_Json: (context && context.cascade) ? JSON.stringify(context.cascade) : '',
+    Deleted_By: (context && context.user) || '',
+    Deleted_On: new Date().toISOString()
+  }));
 
-  var statusIndex = headers.indexOf('Status');
-  if (statusIndex !== -1) {
-    sheet.getRange(rowNumber, statusIndex + 1).setValue('Deleted');
+  // Force the archive row out before destroying the original. Without this
+  // both writes are still pending, and a failure here would take the record
+  // with it.
+  SpreadsheetApp.flush();
+
+  sheet.deleteRow(rowNumber);
+  SpreadsheetApp.flush();
+
+  return { ok: true, rowNumber: rowNumber, removed: true, archived: true };
+}
+
+/**
+ * The Deleted_Items tab, created with its header row if it is not there.
+ *
+ * A record is about to be destroyed, so the copy has to go somewhere. Making
+ * the tab is better than refusing to delete, and far better than deleting
+ * with nowhere to put the copy.
+ */
+function archiveSheet() {
+  var book = SpreadsheetApp.getActiveSpreadsheet();
+  var archive = book.getSheetByName(DELETED_TAB);
+  if (archive) return archive;
+
+  archive = book.insertSheet(DELETED_TAB);
+  archive.appendRow([
+    'Deletion_Id', 'Record_Type', 'Record_Ref_Id', 'Record_Label',
+    'Record_Json', 'Cascade_Json',
+    'Deleted_By', 'Deleted_On', 'Purge_On', 'Restored_By', 'Restored_On'
+  ]);
+  SpreadsheetApp.flush();
+  return archive;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Dropdowns in the Sheet itself                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Put a master list on a column as Google's own data-validation dropdown.
+ *
+ * `targets` is [{ tab: 'Vendors', column: 'Vendor_Type' }, ...] — the app
+ * holds that mapping, in config/driveSchema.js. Invalid entries are allowed so
+ * that a value removed from the list does not turn every record already
+ * recorded against it into an error; Sheets marks those cells instead.
+ *
+ * A tab or column that does not exist is skipped rather than failing the whole
+ * call, so one renamed tab cannot stop the rest of the lists being applied.
+ */
+function setValidation(targets, values) {
+  var clean = (values || [])
+    .map(function (v) { return String(v).trim(); })
+    .filter(function (v) { return v !== ''; });
+
+  if (!clean.length) throw new Error('A dropdown needs at least one value.');
+  if (!targets || !targets.length) return { ok: true, applied: 0, skipped: [] };
+
+  var rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(clean, true)
+    .setAllowInvalid(true)
+    .setHelpText('Set from Master Lists in the Waste Operations app.')
+    .build();
+
+  var book = SpreadsheetApp.getActiveSpreadsheet();
+  var applied = [];
+  var skipped = [];
+
+  for (var i = 0; i < targets.length; i++) {
+    var tabName = targets[i].tab;
+    var columnName = targets[i].column;
+    var sheet = book.getSheetByName(tabName);
+
+    if (!sheet || sheet.getLastColumn() === 0) {
+      skipped.push(tabName + '!' + columnName);
+      continue;
+    }
+
+    var headers = headersOf(sheet);
+    var column = headers.indexOf(columnName) + 1;
+    if (!column) {
+      skipped.push(tabName + '!' + columnName);
+      continue;
+    }
+
+    // Everything below the header row, so rows added later are covered too.
+    var height = Math.max(sheet.getMaxRows() - 1, 1);
+    sheet.getRange(2, column, height, 1).setDataValidation(rule);
+    applied.push(tabName + '!' + columnName);
   }
 
   SpreadsheetApp.flush();
-  return { ok: true, rowNumber: rowNumber };
+  return { ok: true, applied: applied.length, columns: applied, skipped: skipped };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -196,7 +310,15 @@ function subFolder(name) {
   return existing.hasNext() ? existing.next() : root.createFolder(name);
 }
 
-/** `data` is the base64 body of the file, without the data: URL prefix. */
+/**
+ * `data` is the base64 body of the file, without the data: URL prefix.
+ *
+ * The file is made viewable by anyone with the link. The app has no Google
+ * sign-in, so a file left private to this account cannot be shown in a
+ * thumbnail or opened from a link in the app at all. Nothing uploaded here is
+ * listed or searchable in Drive for anyone who does not already hold the id,
+ * which is only in the Sheet.
+ */
 function uploadFile(folder, name, mimeType, data) {
   if (!data) throw new Error('No file content was received.');
 
@@ -204,5 +326,47 @@ function uploadFile(folder, name, mimeType, data) {
   var blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', name || 'upload');
   var file = subFolder(folder || 'Documents').createFile(blob);
 
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (err) {
+    // A Workspace domain can forbid link sharing. The upload itself stands;
+    // the file is then only openable by people with access to the folder.
+  }
+
   return { ok: true, fileId: file.getId() };
+}
+
+/**
+ * Run once from the Apps Script editor (Run > shareExistingUploads).
+ *
+ * Files uploaded before the change above are still private to this account,
+ * so the app cannot display them. This walks the uploads folder and gives
+ * every file the same "anyone with the link — viewer" access. It is safe to
+ * run again: setting the access a file already has does nothing.
+ */
+function shareExistingUploads() {
+  var root = DriveApp.getFolderById(ROOT_FOLDER_ID);
+  var shared = 0;
+  var failed = 0;
+
+  var share = function (files) {
+    while (files.hasNext()) {
+      var file = files.next();
+      try {
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        shared += 1;
+      } catch (err) {
+        failed += 1;
+        Logger.log('Could not share ' + file.getName() + ': ' + err);
+      }
+    }
+  };
+
+  share(root.getFiles());
+  var folders = root.getFolders();
+  while (folders.hasNext()) share(folders.next().getFiles());
+
+  var summary = shared + ' file(s) shared, ' + failed + ' failed.';
+  Logger.log(summary);
+  return summary;
 }

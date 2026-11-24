@@ -8,7 +8,7 @@
 import Papa from "papaparse";
 import {
   DRIVE, WRITE_NOT_CONFIGURED, isDriveConfigured, isWriteConfigured, sheetCsvUrl,
-  writeUrlProblem,
+  writeEndpoint, writeUrlProblem,
 } from "../config/driveSchema";
 
 const cache = new Map(); // tabName -> { at, rows }
@@ -82,13 +82,15 @@ async function callApi(action, payload) {
   const problem = writeUrlProblem();
   if (problem) throw new Error(problem);
 
+  const endpoint = writeEndpoint();
+
   let res;
   try {
-    res = await fetch(DRIVE.apiUrl, {
+    res = await fetch(endpoint.url, {
       method: "POST",
       // text/plain avoids a CORS preflight that Apps Script cannot answer.
       headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ action, key: DRIVE.apiKey, ...payload }),
+      body: JSON.stringify({ action, key: endpoint.key, ...payload }),
     });
   } catch {
     /*
@@ -97,7 +99,7 @@ async function callApi(action, payload) {
      * these three, so say so rather than passing on "Failed to fetch".
      */
     throw new Error(
-      `Could not reach the save endpoint at ${DRIVE.apiUrl} — the request was blocked ` +
+      `Could not reach the save endpoint at ${endpoint.url} — the request was blocked ` +
         "before it completed. Usually this means the Web App is not deployed with " +
         '"Who has access: Anyone", the deployment has been deleted, or there is no ' +
         "network connection."

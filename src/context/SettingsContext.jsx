@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import defaults from "../config/defaultLists.json";
-import { SETTINGS, isDriveConfigured } from "../config/driveSchema";
+import { SETTINGS, isDriveConfigured, setSheetWriteEndpoint } from "../config/driveSchema";
 import { readTab } from "../services/sheetsApi";
 
 const SettingsContext = createContext(null);
@@ -39,6 +39,19 @@ export function SettingsProvider({ children }) {
   }, []);
 
   useEffect(() => { load(false); }, [load]);
+
+  /*
+   * Hand the write endpoint over as soon as the Settings tab is read, for a
+   * build that was published without one. Saving only ever happens after a
+   * user action, which is long after this, and a compiled-in URL still wins —
+   * see writeEndpoint() in config/driveSchema.js.
+   */
+  useEffect(() => {
+    const row = (key) =>
+      rows.find((r) => String(r.Setting_Key || "").trim() === key)?.Setting_Value;
+
+    setSheetWriteEndpoint({ apiUrl: row("apiUrl"), apiKey: row("apiKey") });
+  }, [rows]);
 
   const value = useMemo(() => {
     const sheet = Object.fromEntries(

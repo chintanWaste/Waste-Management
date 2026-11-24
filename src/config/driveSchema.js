@@ -45,8 +45,34 @@ export const DRIVE = {
 
 export const isDriveConfigured = () => Boolean(DRIVE.sheetId);
 
+/**
+ * The write endpoint, which may arrive from either side.
+ *
+ * The build-time values above are compiled in and cannot be changed without
+ * rebuilding, which is a problem in practice: every new Apps Script deployment
+ * has its own /exec URL, so a published site goes on posting to the old one.
+ * The Settings tab of the Sheet — read at startup, before anything can be
+ * saved — may therefore carry "apiUrl" and "apiKey" rows instead.
+ *
+ * A compiled-in value wins when there is one, so a build that was configured
+ * properly never depends on the Sheet.
+ */
+const fromSheet = { apiUrl: "", apiKey: "" };
+
+/** Called by SettingsProvider once the Settings tab has been read. */
+export function setSheetWriteEndpoint({ apiUrl = "", apiKey = "" } = {}) {
+  fromSheet.apiUrl = String(apiUrl || "").trim();
+  fromSheet.apiKey = String(apiKey || "").trim();
+}
+
+/** The URL and key a write should actually use. */
+export const writeEndpoint = () => ({
+  url: DRIVE.apiUrl || fromSheet.apiUrl,
+  key: DRIVE.apiKey || fromSheet.apiKey,
+});
+
 /** True once a write URL of any kind has been configured. */
-export const isWriteConfigured = () => Boolean(DRIVE.apiUrl);
+export const isWriteConfigured = () => Boolean(writeEndpoint().url);
 
 /**
  * Why nothing can be saved, in terms of the copy the reader is looking at.
@@ -59,10 +85,11 @@ export const isWriteConfigured = () => Boolean(DRIVE.apiUrl);
 export const WRITE_NOT_CONFIGURED = env.DEV
   ? "Saving is not connected yet. Set VITE_SHEET_API_URL in .env to the Apps " +
     "Script Web App URL (it ends in /exec), then restart the dev server."
-  : "This published site was built without the Apps Script Web App URL, so " +
-    "nothing can be saved from it. Add the VITE_SHEET_API_URL and " +
-    "VITE_SHEET_API_KEY repository secrets on GitHub and re-run the Deploy " +
-    "workflow. Reading the Sheet is unaffected.";
+  : "Nothing can be saved from this site: no Apps Script Web App URL reached " +
+    "it. Put the deployed /exec URL in an \"apiUrl\" row of the Settings tab of " +
+    "the Sheet, with \"apiKey\" beside it, then reload — or build the site with " +
+    "the VITE_SHEET_API_URL and VITE_SHEET_API_KEY repository secrets set. " +
+    "Reading the Sheet is unaffected.";
 
 /**
  * A deployed Apps Script Web App. Two shapes are valid:
@@ -112,12 +139,21 @@ export function describeWriteUrl(url) {
 }
 
 /** Why the configured write URL cannot be used, or "" if it looks right. */
-export const writeUrlProblem = () => describeWriteUrl(DRIVE.apiUrl);
+export const writeUrlProblem = () => describeWriteUrl(writeEndpoint().url);
 
-/** Read a whole tab as CSV through the gviz endpoint. */
+/**
+ * Read a whole tab as CSV through the gviz endpoint.
+ *
+ * headers=1 is not optional. Left to itself, gviz guesses how many rows are
+ * headings from the column types, and a tab whose values are mostly text with
+ * one number in a column makes it guess high: it folds the real first rows
+ * into the header line, where they are read as part of a column name and the
+ * records simply vanish. Saying there is exactly one heading row removes the
+ * guess.
+ */
 export const sheetCsvUrl = (tabName) =>
   `https://docs.google.com/spreadsheets/d/${DRIVE.sheetId}/gviz/tq` +
-  `?tqx=out:csv&sheet=${encodeURIComponent(tabName)}`;
+  `?tqx=out:csv&headers=1&sheet=${encodeURIComponent(tabName)}`;
 
 /* ========================================================================== */
 /*  2. TAB COLUMNS                                                            */

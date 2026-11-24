@@ -111,6 +111,12 @@
   color: var(--c-body);
   vertical-align: middle;
 }
+/* An alignment utility on a cell has to beat the header's own text-align:
+   `.table th` is more specific than `.u-right`, so a number column would
+   otherwise show a left-aligned heading above right-aligned figures. */
+.table th.u-right, .table td.u-right { text-align: right; }
+.table th.table__num, .table td.table__num { text-align: right; }
+
 .table tbody tr:hover { background: var(--c-surface-2); }
 .table tbody tr:last-child td { border-bottom: none; }
 .table__num { text-align: right; font-variant-numeric: tabular-nums; }

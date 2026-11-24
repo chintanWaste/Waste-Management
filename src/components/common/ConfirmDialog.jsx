@@ -21,6 +21,8 @@ export default function ConfirmDialog({
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
   tone = "danger",
+  /** Blocks only the confirm button — Cancel stays usable, unlike `busy`. */
+  confirmDisabled = false,
   busy = false,
   busyText = "Working…",
   onConfirm,
@@ -44,7 +46,7 @@ export default function ConfirmDialog({
         <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>
           {cancelLabel}
         </Button>
-        <Button type="button" variant={tone} onClick={onConfirm} disabled={busy}>
+        <Button type="button" variant={tone} onClick={onConfirm} disabled={busy || confirmDisabled}>
           {confirmLabel}
         </Button>
       </div>

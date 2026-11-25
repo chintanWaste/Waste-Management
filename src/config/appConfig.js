@@ -62,6 +62,7 @@ export const SETTING = {
   supervisorEditWindowDays: "supervisorEditWindowDays",
   documentExpiryWarnDays: "documentExpiryWarnDays",
   certificatePendingDays: "certificatePendingDays",
+  deletedItemsRetentionDays: "deletedItemsRetentionDays",
 };
 
 /** Yes / No is a boolean, not a configurable list. */

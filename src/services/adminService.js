@@ -410,22 +410,91 @@ export function daysLeft(row, retentionDays = 7) {
   return since === null ? null : Math.max(0, retentionDays - since);
 }
 
-export async function restoreDeleted({ row, user }) {
+/**
+ * Put a deleted record back in its own tab.
+ *
+ * Deleting removes the row outright (apps-script/Code.gs), so there is nothing
+ * left to patch: the record is rebuilt from Record_Json, the full copy the
+ * Apps Script archives before it destroys the row. Rows from the earlier
+ * behaviour — where deleting only set Status to Deleted — are still in some
+ * sheets, so a row that is found is reactivated instead of being appended
+ * again, which would duplicate it.
+ *
+ * The archive row is kept either way, stamped with who restored it and when,
+ * because it is the record of the deletion having happened at all.
+ */
+export async function restoreDeleted({ row, user, retentionDays = 7 }) {
   requireWrite();
 
   const tab = TAB_BY_NAME[row.Record_Type];
   if (!tab) throw new Error(`Unknown record type "${row.Record_Type}".`);
 
-  if (daysLeft(row) === 0) {
-    throw new Error("This record is past its 7-day window and can no longer be restored.");
+  if (row.Restored_On) {
+    throw new Error(`${row.Record_Ref_Id} has already been restored.`);
   }
 
-  await updateRow(tab.tab, tab.idColumn, row.Record_Ref_Id, { Status: "Active" });
+  if (daysLeft(row, retentionDays) === 0) {
+    throw new Error(
+      `This record is past its ${retentionDays}-day window and can no longer be restored.`
+    );
+  }
 
+  // Read fresh: whether the row is there decides between the two paths, and a
+  // cached copy from before the delete would send it down the wrong one.
+  const live = await readTab(tab.tab, { force: true }).catch(() => null);
+  if (live === null) {
+    throw new Error(
+      `The "${tab.tab}" tab could not be read, so ${row.Record_Ref_Id} cannot be restored yet.`
+    );
+  }
+
+  const stillThere = live.some(
+    (r) => String(r[tab.idColumn]) === String(row.Record_Ref_Id)
+  );
+
+  if (stillThere) {
+    await updateRow(tab.tab, tab.idColumn, row.Record_Ref_Id, { Status: "Active" });
+  } else {
+    let snapshot;
+    try {
+      snapshot = JSON.parse(row.Record_Json || "null");
+    } catch {
+      snapshot = null;
+    }
+
+    if (!snapshot || typeof snapshot !== "object") {
+      throw new Error(
+        `The archived copy of ${row.Record_Ref_Id} could not be read, so it cannot be ` +
+          "rebuilt. The row itself is in the Record_Json column of the Deleted_Items tab."
+      );
+    }
+
+    /*
+     * Put back the status it actually had, not "Active" regardless: a record
+     * that was deactivated before it was deleted should come back deactivated.
+     * Only the old soft-delete marker is overridden, since restoring a row
+     * still labelled Deleted would leave it hidden from every screen.
+     */
+    const archivedStatus = String(snapshot.Status ?? "").trim();
+    const status =
+      archivedStatus && archivedStatus.toLowerCase() !== "deleted"
+        ? archivedStatus
+        : "Active";
+
+    await appendRow(tab.tab, { ...snapshot, Status: status });
+  }
+
+  /*
+   * Stamped only now. The other order would mark the record as restored and
+   * then leave it missing if the rebuild failed, which is the one outcome
+   * nobody could recover from through the screen.
+   */
   await updateRow(DELETED_ITEMS.tab, DELETED_ITEMS.idColumn, row.Deletion_Id, {
     Restored_By: user?.id || "",
     Restored_On: new Date().toISOString(),
   });
+
+  return { id: row.Record_Ref_Id, rebuilt: !stillThere };
 }
 
 /* --------------------------------------------------------- 17.4 settings */

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import Card from "../../components/common/Card";
+import ConfirmDialog from "../../components/common/ConfirmDialog";
 import DataTable from "../../components/common/DataTable";
 import PageHeader from "../../components/common/PageHeader";
 import { Banner } from "../../components/common/States";
@@ -14,6 +15,9 @@ import { useSheetData } from "../../hooks/useSheetData";
 import { daysLeft, restoreDeleted } from "../../services/adminService";
 import { dateTime } from "../../utils/format";
 
+/** Record_Type is the sheet's own tab name, which reads better unhyphenated. */
+const tabLabel = (type) => String(type || "").replace(/_/g, " ");
+
 /** Section 4.7 / 17.2 — records deleted recently, restorable for a few days. */
 export default function DeletedItemsPage() {
   const { user } = useAuth();
@@ -22,6 +26,7 @@ export default function DeletedItemsPage() {
   const { rows, loading, error, reload } = useSheetData(DELETED_ITEMS.tab);
 
   const [busy, setBusy] = useState("");
+  const [confirming, setConfirming] = useState(null);
   const retention = number(SETTING.deletedItemsRetentionDays, 7);
 
   const items = useMemo(
@@ -34,14 +39,19 @@ export default function DeletedItemsPage() {
 
   const restorable = items.filter((row) => !row.Restored_On && row.left > 0);
 
-  const restore = async (row) => {
-    if (!window.confirm(`Restore ${row.Record_Type} ${row.Record_Ref_Id}?`)) return;
+  const restore = async () => {
+    const row = confirming;
+    if (!row) return;
+
     setBusy(row.Deletion_Id);
     try {
-      await restoreDeleted({ row, user });
+      const { rebuilt } = await restoreDeleted({ row, user, retentionDays: retention });
+      setConfirming(null);
       toast.success(
         `${row.Record_Ref_Id} restored`,
-        "It is active again, with everything deleted alongside it."
+        rebuilt
+          ? `It has been written back into the ${tabLabel(row.Record_Type)} tab and is active again.`
+          : "It is active again."
       );
       reload();
     } catch (err) {
@@ -77,7 +87,7 @@ export default function DeletedItemsPage() {
           rows={items} loading={loading} error={error} onRetry={reload}
           exportName="Deleted_Items" emptyText="Nothing has been deleted"
           columns={[
-            { key: "Record_Type", header: "Type" },
+            { key: "Record_Type", header: "Type", render: (row) => tabLabel(row.Record_Type) },
             {
               key: "Record_Ref_Id", header: "Code",
               render: (row) => <span className="table__code">{row.Record_Ref_Id}</span>,
@@ -109,8 +119,8 @@ export default function DeletedItemsPage() {
                   return (
                     <button
                       className="btn btn--ghost btn--sm"
-                      onClick={() => restore(row)}
-                      disabled={busy === row.Deletion_Id}
+                      onClick={() => setConfirming(row)}
+                      disabled={Boolean(busy)}
                     >
                       <RotateCcw size={13} aria-hidden="true" />
                       {busy === row.Deletion_Id ? "Restoring…" : "Restore"}
@@ -127,6 +137,29 @@ export default function DeletedItemsPage() {
           ]}
         />
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(confirming)}
+        title="Restore this record?"
+        subtitle={
+          confirming
+            ? `${confirming.Record_Ref_Id} — ${confirming.Record_Label || confirming.Record_Type}`
+            : ""
+        }
+        message={
+          confirming
+            ? `It will be written back into the ${tabLabel(confirming.Record_Type)} tab as an ` +
+              "active record, exactly as it was when it was deleted."
+            : ""
+        }
+        note="It goes back at the end of its tab rather than in its original position — the data is the same, the row order is not."
+        confirmLabel="Restore"
+        tone="primary"
+        busy={Boolean(busy)}
+        busyText="Restoring the record…"
+        onConfirm={restore}
+        onCancel={() => setConfirming(null)}
+      />
     </>
   );
 }

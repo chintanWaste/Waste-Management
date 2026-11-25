@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { RotateCw, Save } from "lucide-react";
+import { Download, RotateCw, Save } from "lucide-react";
 import Button from "../../components/common/Button";
 import Card from "../../components/common/Card";
 import PageHeader from "../../components/common/PageHeader";
@@ -12,10 +12,14 @@ import { saveSettings } from "../../services/adminService";
 /**
  * Section 17.4 — Settings.
  *
- * The Settings tab is the single source of every dropdown list, threshold and
- * factor the application uses, so editing a value here changes the whole
- * application without a code change. Lists are pipe-separated in one cell;
- * this screen edits them one value per line, which is easier to read.
+ * The Settings tab is the single source of every threshold and factor the
+ * application uses, so editing a value here changes the whole application
+ * without a code change.
+ *
+ * A setting with no row in the tab is not unset: the built-in default in
+ * config/defaultLists.json is in force, and that is what the field shows. The
+ * screen would otherwise sit there blank while the application ran on values
+ * it never mentioned.
  */
 const GROUPS = [
   {
@@ -55,7 +59,7 @@ const labelFor = (key) =>
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const { raw, rows, loading, error, reload } = useSettings();
+  const { raw, rows, defaults, loading, error, reload } = useSettings();
   const toast = useToast();
 
   const [edits, setEdits] = useState({});
@@ -66,17 +70,26 @@ export default function SettingsPage() {
     [rows]
   );
 
-  const valueOf = (key) => (key in edits ? edits[key] : raw[key] ?? "");
-  const changed = Object.keys(edits).filter((key) => edits[key] !== (raw[key] ?? ""));
+  /** The value the application is using right now, whatever its source. */
+  const builtIn = (key) => {
+    const value = defaults.numbers?.[key] ?? defaults.text?.[key];
+    return value === undefined || value === null ? "" : String(value);
+  };
+  const effective = (key) => (key in raw ? raw[key] : builtIn(key));
 
-  const save = async () => {
+  const valueOf = (key) => (key in edits ? edits[key] : effective(key));
+  const changed = Object.keys(edits).filter((key) => edits[key] !== effective(key));
+
+  const allKeys = GROUPS.flatMap((g) => g.keys);
+  const onDefault = allKeys.filter((key) => !(key in raw));
+
+  const write = async (patch, done) => {
     setSaving(true);
     try {
-      const patch = Object.fromEntries(changed.map((key) => [key, edits[key]]));
       const count = await saveSettings({ changes: patch, user });
       toast.success(
         `${count} setting${count === 1 ? "" : "s"} saved`,
-        "The change applies across the application straight away."
+        done || "The change applies across the application straight away."
       );
       setEdits({});
       reload();
@@ -87,10 +100,22 @@ export default function SettingsPage() {
     }
   };
 
+  const save = () =>
+    write(Object.fromEntries(changed.map((key) => [key, edits[key]])));
+
+  /**
+   * Write the built-in defaults into the tab as real rows. Nothing about how
+   * the application behaves changes — the same values were already in force —
+   * but they become visible and editable in the Sheet.
+   */
+  const adopt = () =>
+    write(
+      Object.fromEntries(onDefault.map((key) => [key, builtIn(key)])),
+      "The built-in values are now rows in the Settings tab, and can be edited there or here."
+    );
+
   if (loading) return <><PageHeader title="Settings" /><Card><SkeletonRows rows={8} /></Card></>;
   if (error) return <><PageHeader title="Settings" /><Card><ErrorState error={error} onRetry={reload} /></Card></>;
-
-  const missing = GROUPS.flatMap((g) => g.keys).filter((key) => !(key in raw));
 
   return (
     <>
@@ -111,12 +136,23 @@ export default function SettingsPage() {
         }
       />
 
-      {missing.length > 0 && (
+      {onDefault.length > 0 && (
         <div style={{ marginBottom: 16 }}>
-          <Banner tone="warn">
-            {missing.length} setting{missing.length === 1 ? " is" : "s are"} missing from the
-            Settings tab: <code>{missing.join(", ")}</code>. Add the rows, or re-import the
-            template, so those screens have their values.
+          <Banner tone="info">
+            <div className="u-row-between u-wrap" style={{ gap: 12 }}>
+              <span>
+                <b>
+                  {onDefault.length} setting{onDefault.length === 1 ? " is" : "s are"} on
+                  the built-in default
+                </b>{" "}
+                — the values below are the ones in force; they simply have no row in the
+                Settings tab yet. Edit any field to save it, or write them all in at once.
+              </span>
+              <Button size="sm" variant="secondary" onClick={adopt} disabled={saving}>
+                <Download size={13} aria-hidden="true" />
+                Write defaults to the Sheet
+              </Button>
+            </div>
           </Banner>
         </div>
       )}
@@ -127,22 +163,27 @@ export default function SettingsPage() {
             <div className="formgrid">
               {group.keys.map((key) => {
                 const present = key in raw;
-                const value = valueOf(key);
                 const isChanged = changed.includes(key);
 
                 return (
                   <div className="field" key={key}>
                     <label className="field__label">
                       {labelFor(key)}
-                      {isChanged && <span className="badge badge--warn" style={{ marginLeft: 8 }}>changed</span>}
-                      {!present && <span className="badge badge--danger" style={{ marginLeft: 8 }}>missing</span>}
+                      {isChanged && (
+                        <span className="badge badge--warn" style={{ marginLeft: 8 }}>Changed</span>
+                      )}
+                      {!present && !isChanged && (
+                        <span className="badge badge--info" style={{ marginLeft: 8 }}>
+                          Built-in default
+                        </span>
+                      )}
                     </label>
 
-                      <input
-                        className="input"
-                        value={value}
-                        onChange={(e) => setEdits((prev) => ({ ...prev, [key]: e.target.value }))}
-                      />
+                    <input
+                      className="input"
+                      value={valueOf(key)}
+                      onChange={(e) => setEdits((prev) => ({ ...prev, [key]: e.target.value }))}
+                    />
 
                     <span className="field__hint">
                       {descriptions[key] || <code>{key}</code>}

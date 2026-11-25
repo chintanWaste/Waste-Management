@@ -27,7 +27,7 @@ const GROUPS = [
   },
   {
     title: "Fixed Lists",
-    note: "These cannot be changed — the specification fixes them, or the code matches against them.",
+    note: "These cannot be changed — other screens match against these exact values.",
     keys: ["areas", "sourceTypes", "roles", "states"],
   },
 ];

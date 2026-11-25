@@ -28,7 +28,7 @@ const GROUPS = [
   },
   {
     title: "Alert Thresholds",
-    note: "In days — these drive the dashboard alerts of section 6.4.",
+    note: "In days — these drive the dashboard alerts.",
     keys: [
       "certificatePendingDays", "categorisationPendingDays",
       "characterisationPendingDays", "documentExpiryWarnDays", "stockAgeingDays",

@@ -64,7 +64,7 @@ export default function ListEditor({ listKey, meta, values, source, onSave, savi
   const SOURCE_BADGE = {
     sheet: { tone: "ok", text: "From your Sheet" },
     default: { tone: "info", text: "Built-in default" },
-    fixed: { tone: "muted", text: "Fixed by the specification" },
+    fixed: { tone: "muted", text: "Fixed list" },
   }[source];
 
   return (
@@ -151,8 +151,8 @@ export default function ListEditor({ listKey, meta, values, source, onSave, savi
 
       {locked ? (
         <p className="field__hint" style={{ marginTop: 12 }}>
-          Specification section {meta.spec}. Changing these would break the figures
-          already recorded against them.
+          These values cannot be changed — the figures already recorded against them
+          would no longer add up.
         </p>
       ) : (
         <>
@@ -191,12 +191,6 @@ export default function ListEditor({ listKey, meta, values, source, onSave, savi
               </div>
             </div>
           )}
-
-          <p className="field__hint" style={{ marginTop: 10 }}>
-            Section {meta.spec} · {current.length} value{current.length === 1 ? "" : "s"} ·
-            {" "}Click a value to rename it, ‹ › to reorder, × to remove. Add puts the
-            value on the list here; it reaches the Sheet and the dropdowns when you save.
-          </p>
         </>
       )}
     </Card>
